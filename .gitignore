@@ -1,0 +1,5 @@
+cross-utils/*/result
+/hdd.img
+/*.pdf
+zig-cache/
+.vscode/
