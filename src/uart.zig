@@ -60,5 +60,18 @@ fn read() ?u8 {
 
 /// This gets called by the PLIC handler in rupt/plic.zig
 pub fn handle_interrupt() void {
-    put(read().?);
+    const char = read().?;
+    switch (char) {
+        // what enter sends
+        '\r' => {
+            put('\n');
+        },
+        // technically the first one is backspace but everyone uses the second one instead
+        '\x08', '\x7f' => {
+            put('\x08');
+            put(' ');
+            put('\x08');
+        },
+        else => put(char),
+    }
 }

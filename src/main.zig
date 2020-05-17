@@ -2,11 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const uart = @import("./uart.zig");
-const mmio = @import("./mmio.zig");
 const heap = @import("./heap.zig");
 const rupt = @import("./rupt.zig");
-
-const CLINT = mmio.CLINT;
 
 comptime {
     // startup code, I can't be bothered to modify build.zig for this

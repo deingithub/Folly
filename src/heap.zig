@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const assert = std.debug.assert;
+
 const uart = @import("./uart.zig");
 
 /// A Page descriptor, stored starting at __heap_start.
