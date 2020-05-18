@@ -4,6 +4,7 @@
 # goddess, sing of the wrath of Page-Fault Exception
 .section .text.proem
 
+# this is where we enter the kernel
 .global _start
 _start:
     # read hart id
@@ -35,7 +36,10 @@ _start:
 
     # set stack pointer
     la sp, __stack_top
-    # set machine mode and enable interrupts
+    # shuffle around mstatus bits:
+    # bit 12-11: machine previous privilege (set to 3 = Machine Mode)
+    # bit     7: machine previous interrupt enable (set to 1 = Yes)
+    # bit     3: machine interrupt enable (set to 1 = Yes)
     li t0, (1 << 12) | (1 << 11) | (1 << 7) | (1 << 3)
     csrw mstatus, t0
     # set trap return to kmain
@@ -44,7 +48,10 @@ _start:
     # set up interrupt handler
     la t2, interrupt_vec
     csrw mtvec, t2
-    # enable interrupts
+    # enable interrupts:
+    # bit 11: machine mode external interrupts
+    # bit  7: machine mode timer interrupts
+    # bit  3: machine mode software interrupts
     li t3, (1 << 11) | (1 << 7) | (1 << 3)
     csrw mie, t3
     # set return address to wait for interrupt loop

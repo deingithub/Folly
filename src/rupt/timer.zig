@@ -9,7 +9,7 @@ const CLINT = mmio.CLINT;
 var uptime: usize = 0;
 
 /// How often to fire the timer interrupt [Hertz]
-pub const frequency: usize = 4;
+pub const frequency: usize = 40;
 pub const clint_hertz: usize = 10_000_000;
 
 pub fn init() void {

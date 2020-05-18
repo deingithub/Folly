@@ -1,4 +1,6 @@
 //! This file has a low-level interface into the PLIC received interrupts.
+//! Relevant qemu source:
+//! https://git.qemu.org/?p=qemu.git;a=blob;f=include/hw/riscv/virt.h;h=e69355efafad3b32d3ac90a988dafe64ba27f9e2;hb=HEAD
 
 const std = @import("std");
 
@@ -29,14 +31,14 @@ pub fn init() void {
 }
 
 /// Fetches the id of the device that caused the interrupt.
-fn claim() ?u6 {
-    const id = PLIC.claim_or_complete.read(u6);
+fn claim() ?u7 {
+    const id = PLIC.claim_or_complete.read(u7);
     return if (id == 0) null else id;
 }
 
 /// Marks the most recent interrupt of the id as completed.
-fn complete(id: u6) void {
-    PLIC.claim_or_complete.write(u6, id);
+fn complete(id: u7) void {
+    PLIC.claim_or_complete.write(u7, id);
 }
 
 pub fn handle() void {
