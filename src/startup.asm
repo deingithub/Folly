@@ -46,8 +46,10 @@ _start:
     la t1, kmain
     csrw mepc, t1
     # set up interrupt handler
-    la t2, interrupt_vec
+    la t2, asm_rupt
     csrw mtvec, t2
+    la t2, kframe
+    csrw mscratch, t2
     # enable interrupts:
     # bit 11: machine mode external interrupts
     # bit  7: machine mode timer interrupts
@@ -63,11 +65,3 @@ _start:
 youspinmeround:
     wfi
     j youspinmeround
-
-# TODO this fucks over whichever poor sod was working when an interrupt happened
-.global interrupt_vec
-interrupt_vec:
-    csrr a0, mcause
-    csrr a1, mepc
-    call interrupt
-    mret

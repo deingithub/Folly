@@ -8,15 +8,13 @@ const rupt = @import("./rupt.zig");
 comptime {
     // startup code, I can't be bothered to modify build.zig for this
     asm (@embedFile("./startup.asm"));
-    // export the zig interrupt handler for use in the assembly trap vector
-    @export(rupt.handle, .{ .name = "interrupt", .linkage = .Strong });
 }
 
 // this gets called by the startup code. we are in machine mode.
 export fn kmain() noreturn {
     uart.init();
-    rupt.init();
     heap.init();
+    rupt.init();
 
     uart.print("init kmain...\n\n", .{});
 
