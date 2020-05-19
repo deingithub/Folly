@@ -54,9 +54,16 @@ pub const Frame = struct {
             /// Pop <arg> bytes from the stack and write them to UART. Do not
             /// assume any particular formatting.
             log: u11,
+            /// Let the scheduler know that there's nothing to do right now.
+            /// Execution will resume after an indeterminate amount of time.
+            yield: void,
         },
     };
 };
+
+comptime {
+    assert(@sizeOf(TaskList.Node) <= heap.page_size);
+}
 
 /// The task that should get the next compute cycle.
 var active_task: *TaskList.Node = undefined;
@@ -65,18 +72,43 @@ var tasks = TaskList.init();
 /// The last as of yet never used ID
 var new_id: u32 = 0;
 
-const example_string = "Did you know that world-renowned writer Stephen King was once hit by a car?";
+/// This just idles all the time.
+var root_task = TaskList.Node.init(.{
+    .id = 0,
+    .program = &[_]Frame.Instruction{
+        .{ .exec = .{ .yield = {} } },
+        .{ .jump = 0 },
+    },
+});
 
-pub const root_task = [_]Frame.Instruction{
-    .{ .push_const_vec = example_string },
+const ex_1_string = "Did you know that world-renowned writer Stephen King was once hit by a car?";
+pub const ex_1 = [_]Frame.Instruction{
+    .{ .push_const_vec = ex_1_string },
     .{ .push_const = 3 },
     .{ .pop = {} },
     .{ .push_acc = {} },
     .{ .push_const = 1 },
     .{ .sub = {} },
-    .{ .exec = .{ .log = example_string.len } },
-    .{ .jez = 10 },
-    .{ .push_const_vec = example_string },
+    .{ .exec = .{ .log = ex_1_string.len } },
+    .{ .jez = 11 },
+    .{ .exec = .{ .yield = {} } },
+    .{ .push_const_vec = ex_1_string },
+    .{ .jump = 3 },
+    .{ .exit = {} },
+};
+
+const ex_2_string = "Just something to consider.";
+pub const ex_2 = [_]Frame.Instruction{
+    .{ .push_const_vec = ex_2_string },
+    .{ .push_const = 3 },
+    .{ .pop = {} },
+    .{ .push_acc = {} },
+    .{ .push_const = 1 },
+    .{ .sub = {} },
+    .{ .exec = .{ .log = ex_2_string.len } },
+    .{ .jez = 11 },
+    .{ .push_const_vec = ex_2_string },
+    .{ .exec = .{ .yield = {} } },
     .{ .jump = 3 },
     .{ .exit = {} },
 };
@@ -86,8 +118,12 @@ const debug = false;
 
 pub fn init() void {
     uart.print("init interpreter...\n", .{});
-    create_task(root_task[0..]) catch @panic("Kernel OOM while trying to create root task in vm.init()");
-    active_task = tasks.first.?;
+    tasks.prepend(&root_task);
+    active_task = &root_task;
+    uart.print("  set up root idle task\n", .{});
+
+    create_task(ex_2[0..]) catch @panic("Kernel OOM");
+    create_task(ex_1[0..]) catch @panic("Kernel OOM");
 }
 
 pub fn create_task(program: []const Frame.Instruction) !void {
@@ -101,8 +137,16 @@ pub fn create_task(program: []const Frame.Instruction) !void {
     tasks.prepend(task);
 }
 
-comptime {
-    assert(@sizeOf(TaskList.Node) <= heap.page_size);
+pub fn rupt() void {
+    if (comptime debug)
+        uart.print("hit interrupt.\n", .{});
+    reschedule(active_task.next);
+}
+
+fn reschedule(next: ?*TaskList.Node) void {
+    if (comptime debug)
+        uart.print("rescheduling.\n", .{});
+    active_task = next orelse tasks.first orelse @panic("can't reschedule, no tasks");
 }
 
 pub fn run() void {
@@ -157,12 +201,18 @@ pub fn run() void {
                         t.sp -= len;
                         uart.print("task {}: {}\n", .{ t.id, t.stack[t.sp .. t.sp + len] });
                     },
+                    .yield => {
+                        reschedule(active_task.next);
+                    },
                 }
             },
             .exit => {
                 if (comptime debug)
                     uart.print("exited: id {} {}\n", .{ t.id, t });
-                asm volatile ("j youspinmeround");
+                const next = active_task.next;
+                tasks.remove(active_task);
+                tasks.destroyNode(active_task, &heap.kpagealloc);
+                reschedule(next);
             },
         }
     }

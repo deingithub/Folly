@@ -3,6 +3,7 @@
 const std = @import("std");
 const uart = @import("../uart.zig");
 
+const virt = @import("../interpreter/vm.zig");
 const mmio = @import("../mmio.zig");
 const CLINT = mmio.CLINT;
 
@@ -22,6 +23,7 @@ pub fn handle() void {
         usize,
         CLINT.mtime.read(usize) + clint_hertz / frequency,
     );
+    virt.rupt();
 }
 
 pub fn uptime() usize {
