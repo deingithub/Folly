@@ -18,13 +18,10 @@ export fn kmain() noreturn {
 
     uart.print("init kmain...\n\n", .{});
 
-    var kalloc = std.heap.FixedBufferAllocator.init(
-        heap.alloc_pages(1024) catch @panic("Kernel OOM"),
-    );
-
-    var things = std.StringHashMap(usize).init(&kalloc.allocator);
+    var things = std.StringHashMap(usize).init(&heap.kpagealloc);
     things.putNoClobber("answer", 42) catch unreachable;
     uart.print("the answer is: {}\n", .{things.get("answer")});
+    things.deinit();
 
     asm volatile ("j youspinmeround");
     unreachable;
