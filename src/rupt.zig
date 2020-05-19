@@ -15,7 +15,7 @@ comptime {
 /// Initialize all necessary values. Must be called as early as possible
 /// after UART is available.
 pub fn init() void {
-    const k_trap_stack = heap.alloc_pages(1) catch @panic("Kernel OOM");
+    const k_trap_stack = heap.alloc_pages(1) catch @panic("Kernel OOM while trying to allocate kernel trap stack in rupt.init()");
     kframe.trap_stack = &(k_trap_stack[k_trap_stack.len - 1]);
     uart.print("init interrupts...\n", .{});
     Timer.init();

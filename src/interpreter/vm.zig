@@ -5,18 +5,22 @@
 const std = @import("std");
 const heap = @import("../heap.zig");
 const uart = @import("../uart.zig");
+
 const assert = std.debug.assert;
+const TaskList = std.SinglyLinkedList(Frame);
 
 /// Contains all state a task needs to be executable
 pub const Frame = struct {
     /// The VM's accumulator register
-    acc: u64,
+    acc: u64 = 0,
     /// The VM's instruction pointer
-    ip: u64,
+    ip: u64 = 0,
     /// The program stack
-    stack: [256]u64,
+    stack: [256]u64 = [_]u64{0} ** 256,
     /// The Stack Pointer points to the highest currently unused value on the stack
-    sp: u8,
+    sp: u8 = 0,
+    /// The task's ID.
+    id: u32,
     /// A list of instructions to execute
     program: []const Instruction,
 
@@ -55,15 +59,19 @@ pub const Frame = struct {
     };
 };
 
+/// The task that should get the next compute cycle.
+var active_task: *TaskList.Node = undefined;
+/// All tasks.
+var tasks = TaskList.init();
+/// The last as of yet never used ID
+var new_id: u32 = 0;
+
+const example_string = stack_string("Did you know that world-renowned writer Stephen King was once hit by a car?");
 pub fn stack_string(comptime s: []const u8) []const u64 {
     const k = s ++ [_]u8{0} ** (8 - (s.len % 8));
     return @alignCast(8, std.mem.bytesAsSlice(u64, k));
 }
 
-var active_task: usize = undefined;
-var tasks: []Frame = undefined;
-
-const example_string = stack_string("Did you know that world-renowned writer Stephen King was once hit by a car?");
 pub const root_task = [_]Frame.Instruction{
     .{ .push_const_vec = example_string },
     .{ .push_const = 3 },
@@ -82,26 +90,29 @@ pub const root_task = [_]Frame.Instruction{
 const debug = false;
 
 pub fn init() void {
-    tasks = heap.kpagealloc.alloc(Frame, 1) catch @panic("Kernel OOM in vm.init");
-    tasks[0] = .{
-        .acc = 0,
-        .ip = 0,
-        .stack = [_]u64{undefined} ** 256,
-        .sp = 0,
-        .program = root_task[0..],
-    };
-    active_task = 0;
     uart.print("init interpreter...\n", .{});
+    create_task(root_task[0..]) catch @panic("Kernel OOM while trying to create root task in vm.init()");
+    active_task = tasks.first.?;
+}
+
+pub fn create_task(program: []const Frame.Instruction) !void {
+    new_id += 1;
+    errdefer new_id -= 1;
+
+    const task = try tasks.createNode(.{
+        .program = program,
+        .id = new_id,
+    }, &heap.kpagealloc);
+    tasks.prepend(task);
 }
 
 comptime {
-    assert(@sizeOf(Frame) <= heap.page_size);
+    assert(@sizeOf(TaskList.Node) <= heap.page_size);
 }
 
 pub fn run() void {
     while (true) {
-        var id = active_task;
-        var t = &tasks[id];
+        var t = &active_task.data;
         const inst = t.program[t.ip];
         defer {
             if (inst != .jump and inst != .jez) t.ip += 1;
@@ -149,12 +160,12 @@ pub fn run() void {
                 switch (command) {
                     .log => |len| {
                         t.sp -= len;
-                        uart.print("task {}: {}\n", .{ id, std.mem.sliceAsBytes(t.stack[t.sp .. t.sp + len]) });
+                        uart.print("task {}: {}\n", .{ t.id, std.mem.sliceAsBytes(t.stack[t.sp .. t.sp + len]) });
                     },
                 }
             },
             .exit => {
-                uart.print("exited: id {} {}\n", .{ id, t });
+                uart.print("exited: id {} {}\n", .{ t.id, t });
                 asm volatile ("j youspinmeround");
             },
         }
