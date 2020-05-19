@@ -62,7 +62,8 @@ pub fn unimplemented(mcause: usize, mepc: usize) void {
 
     var buf = [_]u8{0} ** 128;
     const fmt_kind = if (is_async) "async" else "sync";
-    const panic = std.fmt.bufPrint(
+
+    @panic(std.fmt.bufPrint(
         buf[0..],
         "unhandled {} interrupt #{} at 0x{x}",
         .{
@@ -70,7 +71,5 @@ pub fn unimplemented(mcause: usize, mepc: usize) void {
             cause,
             mepc,
         },
-    ) catch unreachable;
-
-    @panic(panic);
+    ) catch unreachable);
 }

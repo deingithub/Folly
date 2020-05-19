@@ -45,8 +45,10 @@ pub const Uart = enum(usize) {
 
 /// MMIO adresses for the Core Local Interrupter.
 pub const CLINT = enum(usize) {
-    mtimecmp = 0x0200_4000,
+    /// The machine time counter. QEMU increments this at a frequency of 10Mhz.
     mtime = 0x0200_bff8,
+    /// The machine time compare register, a timer interrupt is fired iff mtimecmp >= mtime
+    mtimecmp = 0x0200_4000,
 
     pub usingnamespace MMIO(@This());
 };

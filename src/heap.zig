@@ -48,15 +48,20 @@ var descriptors: []volatile Page = undefined;
 pub fn init() void {
     // set global variables to linker provided addresses
     heap_start = @ptrToInt(&__heap_start);
+    assert(heap_start % page_size == 0);
     heap_end = @ptrToInt(&__heap_end);
+    assert(heap_end % page_size == 0);
+
+    assert(heap_start < heap_end);
     heap_size = heap_end - heap_start;
 
     // calculate maximum number of pages
     num_pages = heap_size / page_size;
 
-    // calculate actual allocation start without descriptors and align
+    // calculate actual allocation start without descriptors and align it
     alloc_start = heap_start + num_pages * @sizeOf(Page);
     alloc_start = alloc_start + (page_size - (alloc_start % page_size));
+    assert(alloc_start % page_size == 0);
     // calculate actual number of pages
     num_pages = (heap_end - alloc_start) / page_size;
 
@@ -78,12 +83,16 @@ pub fn init() void {
 /// Allocate `num` pages, returning a zeroed slice of memory or error.OutOfMemory.
 pub fn alloc_pages(num: usize) ![]u8 {
     assert(num > 0);
-    assert(num < num_pages);
+    if (num > num_pages) return error.OutOfMemory;
+    var already_visited: usize = 0;
     outer: for (descriptors) |*page, index| {
-        // skip if any pages in the set aren't free
-        if (page.is_taken()) continue;
+        // skip if any pages in the set aren't free or we've already explored them and they were taken
+        if (page.is_taken() or already_visited > index) continue;
         for (descriptors[index .. index + num]) |*other_page| {
-            if (other_page.is_taken()) continue :outer;
+            if (other_page.is_taken()) {
+                already_visited += 1;
+                continue :outer;
+            }
         }
         // set page descriptors
         for (descriptors[index .. index + num]) |*free_page, inner_index| {
@@ -102,12 +111,15 @@ pub fn alloc_pages(num: usize) ![]u8 {
 }
 
 /// Returns pages into the pool of available pages and zeroes them out. Doesn't fail.
+/// Pointer must be one that's been returned from heap.alloc_pages().
 pub fn free_pages(ptr: []u8) void {
-    assert(ptr.len % 4096 == 0);
-    const first_page = (@ptrToInt(ptr.ptr) - alloc_start) / page_size;
+    assert(@ptrToInt(ptr.ptr) % 4096 == 0);
+    // this is one below the actual count but it works out with indexing
     const page_count = ptr.len / 4096;
-    for (descriptors[first_page .. first_page + page_count]) |*desc| {
+    const first_page = (@ptrToInt(ptr.ptr) - alloc_start) / page_size;
+    for (descriptors[first_page .. first_page + page_count]) |*desc, index| {
         assert(desc.is_taken());
+        if (index == page_count - 1) assert(desc.is_last());
         desc.*.flags = @enumToInt(Page.Flags.empty);
     }
     for (ptr) |*b| b.* = 0;

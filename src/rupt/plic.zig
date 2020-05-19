@@ -48,12 +48,12 @@ pub fn handle() void {
         10 => uart.handle_interrupt(),
         else => {
             var buf = [_]u8{0} ** 128;
-            var msg = std.fmt.bufPrint(
+
+            @panic(std.fmt.bufPrint(
                 buf[0..],
                 "unhandled PLIC interrupt, source {}",
                 .{id},
-            ) catch unreachable;
-            @panic(msg);
+            ) catch unreachable);
         },
     }
     complete(id);

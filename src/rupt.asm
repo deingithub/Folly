@@ -4,9 +4,11 @@
 # this directive enables %i a few lines below
 .altmacro
 # assembly, now with even less effort!
+# store a register x\i into the address in t6, offset by \i*8
 .macro save_x_register i
     sd x\i, \i*8(t6)
 .endm
+# read a register x\i from the address in t6, offset by \i*8
 .macro load_x_register i
     ld x\i, \i*8(t6)
 .endm

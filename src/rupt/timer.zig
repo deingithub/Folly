@@ -1,12 +1,10 @@
 //! This file manages the CLINT timer interrupt
 
 const std = @import("std");
+const uart = @import("../uart.zig");
 
 const mmio = @import("../mmio.zig");
 const CLINT = mmio.CLINT;
-
-/// Uptime in timer cycles
-var uptime: usize = 0;
 
 /// How often to fire the timer interrupt [Hertz]
 pub const frequency: usize = 40;
@@ -20,18 +18,20 @@ pub fn init() void {
 }
 
 pub fn handle() void {
-    uptime += 1;
-
     CLINT.mtimecmp.write(
         usize,
         CLINT.mtime.read(usize) + clint_hertz / frequency,
     );
 }
 
-pub fn time() usize {
-    return uptime / frequency;
+pub fn uptime() usize {
+    return CLINT.mtime.read(usize);
 }
 
-fn every(secs: usize) bool {
-    return uptime % (frequency * secs) == 0;
+pub fn time() usize {
+    return uptime() / frequency;
+}
+
+fn every(msecs: usize) bool {
+    return uptime() % (frequency * msecs / 1000) == 0;
 }
