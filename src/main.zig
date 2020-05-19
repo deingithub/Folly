@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const uart = @import("./uart.zig");
 const heap = @import("./heap.zig");
 const rupt = @import("./rupt.zig");
+const virt = @import("/interpreter/vm.zig");
 
 comptime {
     // startup code, I can't be bothered to modify build.zig for this
@@ -15,13 +16,11 @@ export fn kmain() noreturn {
     uart.init();
     heap.init();
     rupt.init();
+    virt.init();
+    uart.print("init kmain...\n", .{});
 
-    uart.print("init kmain...\n\n", .{});
-
-    var things = std.StringHashMap(usize).init(&heap.kpagealloc);
-    things.putNoClobber("answer", 42) catch unreachable;
-    uart.print("the answer is: {}\n", .{things.get("answer")});
-    things.deinit();
+    uart.print("  handover to interpreter...\n", .{});
+    virt.run();
 
     asm volatile ("j youspinmeround");
     unreachable;
