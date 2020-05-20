@@ -146,7 +146,7 @@ pub fn rupt() void {
 fn reschedule(next: ?*TaskList.Node) void {
     if (comptime debug)
         uart.print("rescheduling.\n", .{});
-    active_task = next orelse tasks.first orelse @panic("can't reschedule, no tasks");
+    active_task = next orelse tasks.first orelse &root_task;
 }
 
 pub fn run() void {
