@@ -31,6 +31,48 @@ export var kframe linksection(".bss") = TrapFrame{
     .hartid = 0,
 };
 
+fn async_interrupt(comptime n: u63) u64 {
+    return (1 << 63) + @as(usize, n);
+}
+fn sync_interrupt(comptime n: u63) u64 {
+    return (0 << 63) + @as(usize, n);
+}
+
+/// This *ought* to be a non-exhaustive enum because the spec allows
+/// implementation-defined interrupts, but why would I bother with that.
+pub const InterruptCause = enum(u64) {
+    // Asynchronous Interrupts
+    user_software = async_interrupt(0),
+    supervisor_software = async_interrupt(1),
+    // async_interrupt(2) reserved
+    machine_software = async_interrupt(3),
+    user_timer = async_interrupt(4),
+    supervisor_timer = async_interrupt(5),
+    // async_interrupt(6) reserved
+    machine_timer = async_interrupt(7),
+    user_external = async_interrupt(8),
+    supervisor_external = async_interrupt(9),
+    // async_interrupt(10) reserved
+    machine_external = async_interrupt(11),
+    // Synchronous Interrupts
+    instruction_address_misaligned = sync_interrupt(0),
+    instruction_access_faul = sync_interrupt(1),
+    illegal_instruction = sync_interrupt(2),
+    breakpoint = sync_interrupt(3),
+    load_address_misaligned = sync_interrupt(4),
+    load_access_fault = sync_interrupt(5),
+    store_amo_address_misaligned = sync_interrupt(6),
+    store_amo_access_fault = sync_interrupt(7),
+    environment_call_from_user = sync_interrupt(8),
+    environment_call_from_supervisor = sync_interrupt(9),
+    // sync_interrupt(10) reserved
+    environment_call_from_machine = sync_interrupt(11),
+    instruction_page_fault = sync_interrupt(12),
+    load_page_fault = sync_interrupt(13),
+    // sync_interrupt(14) reserved
+    store_amo_page_fault = sync_interrupt(15),
+};
+
 /// The interrupt vector that the processor jumps to
 export fn rupt() align(4) callconv(.Naked) void {
     comptime {
@@ -94,39 +136,21 @@ export fn rupt() align(4) callconv(.Naked) void {
 }
 
 /// The actual interrupt vector above jumps here for high-level processing of the interrupt.
-export fn zig_rupt(cause: usize, epc: usize, tval: usize, frame: *TrapFrame) callconv(.C) usize {
-    const is_async = @clz(usize, cause) == 0;
-
-    if (is_async) {
-        switch (@truncate(u63, cause)) {
-            7 => Timer.handle(),
-            11 => PLIC.handle(),
-            else => unimplemented(cause, epc),
-        }
-    } else {
-        switch (@truncate(u63, cause)) {
-            else => unimplemented(cause, epc),
-        }
+export fn zig_rupt(mcause: usize, epc: usize, tval: usize, frame: *TrapFrame) callconv(.C) usize {
+    switch (@intToEnum(InterruptCause, mcause)) {
+        .machine_timer => Timer.handle(),
+        .machine_external => PLIC.handle(),
+        else => |cause| unimplemented(cause, epc),
     }
-
     return epc;
 }
 
 /// Panic, AAAAAAAAAAAAAAAAAAAAAAAAA
-pub fn unimplemented(mcause: usize, mepc: usize) void {
-    const is_async = @clz(usize, mcause) == 0;
-    const cause = @truncate(u63, mcause);
-
+pub fn unimplemented(cause: InterruptCause, mepc: usize) void {
     var buf = [_]u8{0} ** 128;
-    const fmt_kind = if (is_async) "async" else "sync";
-
     @panic(std.fmt.bufPrint(
         buf[0..],
-        "unhandled {} interrupt #{} at 0x{x}",
-        .{
-            fmt_kind,
-            cause,
-            mepc,
-        },
+        "unhandled {} at 0x{x}",
+        .{ cause, mepc },
     ) catch unreachable);
 }
