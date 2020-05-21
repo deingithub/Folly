@@ -108,16 +108,18 @@ var root_task = TaskList.Node.init(.{
     .waiting = true,
 });
 
-/// whether or not to spam debug information to UART in methods
-const debug = false;
+const debug = @import("build_options").log_vm;
 
 pub fn init() void {
-    uart.print("init interpreter...\n", .{});
+    if (comptime debug)
+        uart.print("init interpreter...\n", .{});
+
     tasks.prepend(&root_task);
     active_task = &root_task;
-    uart.print("  set up root idle task\n", .{});
-    create_task(example_tasks.echo[0..]) catch @panic("Kernel OOM");
+    if (comptime debug)
+        uart.print("  set up root idle task\n", .{});
 
+    create_task(example_tasks.echo[0..]) catch @panic("Kernel OOM");
     create_task(example_tasks.just_think[0..]) catch @panic("Kernel OOM");
     create_task(example_tasks.did_you_know[0..]) catch @panic("Kernel OOM");
 }
@@ -149,13 +151,14 @@ pub fn notify(data: VMNotif) void {
 }
 
 pub fn schedule() void {
-    if (comptime debug)
+    const my_debug = @import("build_options").log_sched;
+    if (comptime my_debug)
         uart.print("schedule: rescheduling\n", .{});
 
     var next = active_task.next orelse tasks.first;
     if (next) |task| {
         if (!task.data.waiting) {
-            if (comptime debug)
+            if (comptime my_debug)
                 uart.print("schedule: directly found non-waiting task id {}, switching\n", .{task.data.id});
             active_task = task;
             return;
@@ -165,14 +168,14 @@ pub fn schedule() void {
     var it = tasks.first;
     while (it) |task| : (it = task.next) {
         if (!task.data.waiting) {
-            if (comptime debug)
+            if (comptime my_debug)
                 uart.print("schedule: iteration found non-waiting task id {}, switching\n", .{task.data.id});
             active_task = task;
             return;
         }
     }
 
-    if (comptime debug)
+    if (comptime my_debug)
         uart.print("schedule: all tasks waiting, going to sleep\n", .{});
     asm volatile ("wfi");
     return;

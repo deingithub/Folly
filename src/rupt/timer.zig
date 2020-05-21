@@ -7,6 +7,8 @@ const virt = @import("../interpreter/vm.zig");
 const mmio = @import("../mmio.zig");
 const CLINT = mmio.CLINT;
 
+const debug = @import("build_options").log_clint;
+
 /// How often to fire the timer interrupt [Hertz]
 pub const frequency: usize = 40;
 pub const clint_hertz: usize = 10_000_000;
@@ -16,6 +18,8 @@ pub fn init() void {
         usize,
         CLINT.mtime.read(usize) + clint_hertz / frequency,
     );
+    if (comptime debug)
+        uart.print("  timer interrupt at {}Hz\n", .{frequency});
 }
 
 pub fn handle() void {

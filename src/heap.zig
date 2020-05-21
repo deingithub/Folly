@@ -30,7 +30,7 @@ const Page = extern struct {
 
 pub const page_size = 4096;
 /// whether or not to spam debug information to UART in methods
-const debug = false;
+const debug = @import("build_options").log_heap;
 
 // take the address of these you fuckdoodle
 extern const __heap_start: u8;
@@ -114,21 +114,21 @@ pub fn init() void {
         page.* = .{ .flags = @enumToInt(Page.Flags.empty) };
     }
 
-    uart.print(
-        \\init heap...
-        \\  start at 0x{x}, size 0x{x}
-        \\  {} pages starting at 0x{x}
-        \\
-    ,
-        .{ heap_start, heap_size, num_pages, alloc_start },
-    );
+    if (comptime debug)
+        uart.print(
+            \\init heap...
+            \\  start at 0x{x}, size 0x{x}
+            \\  {} pages starting at 0x{x}
+            \\
+        ,
+            .{ heap_start, heap_size, num_pages, alloc_start },
+        );
 }
 
 /// Allocate `num` pages, returning a zeroed slice of memory or error.OutOfMemory.
 pub fn alloc_pages(num: usize) ![]u8 {
-    if (comptime debug) {
+    if (comptime debug)
         uart.print("alloc_pages invoked with num {}\n", .{num});
-    }
     defer {
         if (comptime debug) dump_page_table();
     }
@@ -164,9 +164,8 @@ pub fn alloc_pages(num: usize) ![]u8 {
 /// Returns pages into the pool of available pages and zeroes them out. Doesn't fail.
 /// Pointer must be one that's been returned from heap.alloc_pages().
 pub fn free_pages(ptr: []u8) void {
-    if (comptime debug) {
+    if (comptime debug)
         uart.print("free_pages invoked with ptr {}:{}\n", .{ ptr.ptr, ptr.len });
-    }
     defer {
         if (comptime debug) dump_page_table();
     }

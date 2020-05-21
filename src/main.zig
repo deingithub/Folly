@@ -5,6 +5,7 @@ const uart = @import("./uart.zig");
 const heap = @import("./heap.zig");
 const rupt = @import("./rupt.zig");
 const virt = @import("/interpreter/vm.zig");
+const options = @import("build_options");
 
 comptime {
     // startup code, I can't be bothered to modify build.zig for this
@@ -17,9 +18,12 @@ export fn kmain() noreturn {
     heap.init();
     rupt.init();
     virt.init();
-    uart.print("init kmain...\n", .{});
 
-    uart.print("  handover to interpreter...\n", .{});
+    uart.print("Welcome to The Folly of Cass. Godspeed.\n\n", .{});
+
+    if (options.log_vm)
+        uart.print("  handover to interpreter...\n", .{});
+
     virt.run();
 
     asm volatile ("j youspinmeround");

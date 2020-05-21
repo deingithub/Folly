@@ -8,6 +8,8 @@ const uart = @import("../uart.zig");
 const mmio = @import("../mmio.zig");
 const PLIC = mmio.PLIC;
 
+const debug = @import("build_options").log_plic;
+
 /// Enable these interrupts with these priorities.
 const interrupts = [_]struct { id: u6, priority: u3 }{
     // The UART's Data Received interrupt.
@@ -28,6 +30,8 @@ pub fn init() void {
         );
     }
     PLIC.threshold.write(u8, 1);
+    if (comptime debug)
+        uart.print("  PLIC set up\n", .{});
 }
 
 /// Fetches the id of the device that caused the interrupt.

@@ -4,6 +4,8 @@ const std = @import("std");
 const Uart = @import("./mmio.zig").Uart;
 const virt = @import("./interpreter/vm.zig");
 
+const debug = @import("build_options").log_uart;
+
 /// Initialize the UART. Should be called very, *very* early. Must
 /// have been called before any write/read occurs.
 pub fn init() void {
@@ -28,7 +30,8 @@ pub fn init() void {
     // Disable divisor latch
     Uart.lcr.write(u8, 0b0000_0011);
 
-    print("init uart...\n", .{});
+    if (comptime debug)
+        print("init uart...\n", .{});
 }
 
 /// Formatted printing! Yay!
