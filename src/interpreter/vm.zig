@@ -6,6 +6,8 @@ const std = @import("std");
 const heap = @import("../heap.zig");
 const uart = @import("../uart.zig");
 
+const example_tasks = @import("./example_tasks.zig");
+
 const assert = std.debug.assert;
 const TaskList = std.SinglyLinkedList(Frame);
 
@@ -27,6 +29,8 @@ pub const Frame = struct {
     notifs: std.ArrayList(VMNotif) = std.ArrayList(VMNotif).init(&heap.kpagealloc),
     /// Handler addresses for notifications
     handlers: [@typeInfo(VMNotifKind).Enum.fields.len]?usize = [_]?usize{null} ** @typeInfo(VMNotifKind).Enum.fields.len,
+    /// Whether or not the task is doing nothing but waiting for a notification to happen
+    waiting: bool = false,
 
     pub const Instruction = union(enum) {
         /// Don't.
@@ -66,6 +70,10 @@ pub const Frame = struct {
             /// instruction pointer will be pushed onto the stack. Return using
             /// jump.
             subscribe: struct { address: usize, kind: VMNotifKind },
+            /// Set the task's waiting status. Waiting tasks will only be
+            /// resumed when a notification they have subscribed to
+            /// is generated, after which set_waiting has to be issued again.
+            set_waiting: bool,
         },
     };
 
@@ -96,57 +104,9 @@ var new_id: u32 = 0;
 /// This just idles all the time.
 var root_task = TaskList.Node.init(.{
     .id = 0,
-    .program = &[_]Frame.Instruction{
-        .{ .yield = {} },
-        .{ .push_const = 0 },
-        .{ .jump = {} },
-    },
+    .program = &[_]Frame.Instruction{},
+    .waiting = true,
 });
-
-const ex_1_string = "Did you know that world-renowned writer Stephen King was once hit by a car?";
-pub const ex_1 = [_]Frame.Instruction{
-    .{ .push_const_vec = ex_1_string },
-    .{ .push_const = 3 },
-    .{ .pop = {} },
-    .{ .push_acc = {} },
-    .{ .push_const = 1 },
-    .{ .sub = {} },
-    .{ .exec = .{ .log = ex_1_string.len } },
-    .{ .push_const = 13 },
-    .{ .jez = {} },
-    .{ .yield = {} },
-    .{ .push_const_vec = ex_1_string },
-    .{ .push_const = 3 },
-    .{ .jump = {} },
-    .{ .exit = {} },
-};
-
-const ex_2_string = "Just something to consider.";
-pub const ex_2 = [_]Frame.Instruction{
-    .{ .push_const_vec = ex_2_string },
-    .{ .push_const = 3 },
-    .{ .pop = {} },
-    .{ .push_acc = {} },
-    .{ .push_const = 1 },
-    .{ .sub = {} },
-    .{ .exec = .{ .log = ex_2_string.len } },
-    .{ .push_const = 13 },
-    .{ .jez = {} },
-    .{ .push_const_vec = ex_2_string },
-    .{ .yield = {} },
-    .{ .push_const = 3 },
-    .{ .jump = {} },
-    .{ .exit = {} },
-};
-
-pub const echo = [_]Frame.Instruction{
-    .{ .exec = .{ .subscribe = .{ .kind = .uart_data, .address = 4 } } },
-    .{ .yield = {} },
-    .{ .push_const = 1 },
-    .{ .jump = {} },
-    .{ .exec = .{ .log = 1 } },
-    .{ .jump = {} },
-};
 
 /// whether or not to spam debug information to UART in methods
 const debug = false;
@@ -156,10 +116,10 @@ pub fn init() void {
     tasks.prepend(&root_task);
     active_task = &root_task;
     uart.print("  set up root idle task\n", .{});
-    create_task(echo[0..]) catch @panic("Kernel OOM");
+    create_task(example_tasks.echo[0..]) catch @panic("Kernel OOM");
 
-    create_task(ex_2[0..]) catch @panic("Kernel OOM");
-    create_task(ex_1[0..]) catch @panic("Kernel OOM");
+    create_task(example_tasks.just_think[0..]) catch @panic("Kernel OOM");
+    create_task(example_tasks.did_you_know[0..]) catch @panic("Kernel OOM");
 }
 
 pub fn create_task(program: []const Frame.Instruction) !void {
@@ -175,28 +135,59 @@ pub fn create_task(program: []const Frame.Instruction) !void {
 
 pub fn notify(data: VMNotif) void {
     if (comptime debug)
-        uart.print("hit interrupt.\n", .{});
+        uart.print("notify: received {}\n", .{data});
     var it = tasks.first;
     while (it) |*node| : (it = node.*.next) {
         if (node.*.data.handlers[@enumToInt(data)]) |address| {
+            if (comptime debug)
+                uart.print("notify: adding to {}\n", .{node.*.data});
+
             node.*.data.notifs.append(data) catch @panic("Kernel OOM in virt.notify()");
+            node.*.data.waiting = false;
         }
     }
 }
 
-pub fn timer_reschedule() void {
-    reschedule(active_task.next);
-}
-
-fn reschedule(next: ?*TaskList.Node) void {
+pub fn schedule() void {
     if (comptime debug)
-        uart.print("rescheduling.\n", .{});
-    active_task = next orelse tasks.first orelse &root_task;
+        uart.print("schedule: rescheduling\n", .{});
+
+    var next = active_task.next orelse tasks.first;
+    if (next) |task| {
+        if (!task.data.waiting) {
+            if (comptime debug)
+                uart.print("schedule: directly found non-waiting task id {}, switching\n", .{task.data.id});
+            active_task = task;
+            return;
+        }
+    }
+
+    var it = tasks.first;
+    while (it) |task| : (it = task.next) {
+        if (!task.data.waiting) {
+            if (comptime debug)
+                uart.print("schedule: iteration found non-waiting task id {}, switching\n", .{task.data.id});
+            active_task = task;
+            return;
+        }
+    }
+
+    if (comptime debug)
+        uart.print("schedule: all tasks waiting, going to sleep\n", .{});
+    asm volatile ("wfi");
+    return;
 }
 
 pub fn run() void {
     while (true) {
-        var t = &active_task.data;
+        var me = active_task;
+        var t = &me.data;
+        // this shouldn't happen unless we return from a state where
+        // all tasks were waiting
+        if (t.waiting) {
+            schedule();
+            continue;
+        }
 
         if (t.notifs.items.len > 0) {
             const notification = t.notifs.orderedRemove(0);
@@ -216,7 +207,8 @@ pub fn run() void {
             if (inst != .jump and inst != .jez) t.ip += 1;
         }
 
-        if (comptime debug and t.id != 0) uart.print("{}: executing {}\n", .{ t, t.program[t.ip] });
+        if (comptime debug)
+            uart.print("{}: executing {}\n", .{ t, t.program[t.ip] });
 
         switch (t.program[t.ip]) {
             .noop => {},
@@ -258,7 +250,7 @@ pub fn run() void {
                 t.acc = t.stack[t.sp] + t.stack[t.sp + 1];
             },
             .yield => {
-                reschedule(active_task.next);
+                schedule();
             },
             .exec => |command| {
                 switch (command) {
@@ -269,15 +261,18 @@ pub fn run() void {
                     .subscribe => |data| {
                         t.handlers[@enumToInt(data.kind)] = data.address;
                     },
+                    .set_waiting => |val| {
+                        t.waiting = val;
+                    },
                 }
             },
             .exit => {
                 if (comptime debug)
-                    uart.print("exited: id {} {}\n", .{ t.id, t });
-                const next = active_task.next;
-                tasks.remove(active_task);
-                tasks.destroyNode(active_task, &heap.kpagealloc);
-                reschedule(next);
+                    uart.print("exited: {}\n", .{t});
+                tasks.remove(me);
+                tasks.destroyNode(me, &heap.kpagealloc);
+                active_task = &root_task;
+                schedule();
             },
         }
     }
