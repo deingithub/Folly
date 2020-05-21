@@ -20,13 +20,13 @@ pub fn init() void {
 }
 
 const TrapFrame = extern struct {
-    regs: [32]usize, // byte 0-255
-    trap_stack: *u8, // byte 256-263
-    hartid: usize, // byte 264-271
+    regs: [31]usize, // byte 0-247
+    trap_stack: *u8, // byte 248-255
+    hartid: usize, // byte 256-263
 };
 
 export var kframe linksection(".bss") = TrapFrame{
-    .regs = [_]usize{0} ** 32,
+    .regs = [_]usize{0} ** 31,
     .trap_stack = undefined,
     .hartid = 0,
 };
@@ -76,27 +76,27 @@ pub const InterruptCause = enum(u64) {
 /// The interrupt vector that the processor jumps to
 export fn rupt() align(4) callconv(.Naked) void {
     comptime {
-        std.debug.assert(@sizeOf(TrapFrame) == 272); // when this fails, adjust the code below!
+        std.debug.assert(@sizeOf(TrapFrame) == 264); // when this fails, adjust the code below!
     }
 
     // atomically swap trap frame address into t6
     asm volatile ("csrrw t6, mscratch, t6");
 
-    // save first 31 general purpose registers into the trap frame
-    comptime var save_reg = 0;
+    // save first 30 general purpose registers that aren't x0 into the trap frame
+    comptime var save_reg = 1;
     inline while (save_reg < 31) : (save_reg += 1) {
-        @setEvalBranchQuota(5700);
+        @setEvalBranchQuota(11000);
         comptime var buf = [_]u8{0} ** 32;
         asm volatile (comptime std.fmt.bufPrint(
             &buf,
             "sd x{}, {}(t6)",
-            .{ save_reg, save_reg * 8 },
+            .{ save_reg, (save_reg - 1) * 8 },
         ) catch unreachable);
     }
     // save register x31
     asm volatile (
         \\mv t5, t6
-        \\sd t6, 31*8(t5)
+        \\sd t6, 30*8(t5)
         \\csrw mscratch, t5
     );
     // clean slate. set up arguments and call the main handler
@@ -107,7 +107,7 @@ export fn rupt() align(4) callconv(.Naked) void {
         \\csrr a3, mscratch
     );
     asm volatile (
-        \\ld sp, 256(a3)
+        \\ld sp, 248(a3)
         \\call zig_rupt
     );
 
@@ -118,14 +118,14 @@ export fn rupt() align(4) callconv(.Naked) void {
     );
 
     // restore all general purpose registers
-    comptime var load_reg = 0;
+    comptime var load_reg = 1;
     inline while (load_reg < 32) : (load_reg += 1) {
-        @setEvalBranchQuota(10800);
+        @setEvalBranchQuota(10000);
         comptime var buf = [_]u8{0} ** 32;
         asm volatile (comptime std.fmt.bufPrint(
             &buf,
             "ld x{}, {}(t6)",
-            .{ load_reg, load_reg * 8 },
+            .{ load_reg, (load_reg - 1) * 8 },
         ) catch unreachable);
     }
 
