@@ -23,12 +23,16 @@ pub const Frame = struct {
     id: u32,
     /// A list of instructions to execute
     program: []const Instruction,
+    /// Pending Notifications
+    notifs: std.ArrayList(VMNotif) = std.ArrayList(VMNotif).init(&heap.kpagealloc),
+    /// Handler addresses for notifications
+    handlers: [@typeInfo(VMNotifKind).Enum.fields.len]?usize = [_]?usize{null} ** @typeInfo(VMNotifKind).Enum.fields.len,
 
     pub const Instruction = union(enum) {
         /// Don't.
         noop: void,
-        /// Unconditionally jump to the argument index in the program.
-        jump: usize,
+        /// Pop an index from the stack and unconditionally jump there.
+        jump: void,
         /// Die.
         exit: void,
         /// Push the argument onto the stack.
@@ -37,33 +41,50 @@ pub const Frame = struct {
         push_const: u8,
         /// Push the accumulator onto the stack.
         push_acc: void,
-        /// Pop the last value from the stack into the accumulator.
+        /// Pop a value from the stack into the accumulator.
         pop: void,
-        /// Jump to the argument index in the program if accumulator is 0,
+        /// Pop an index from the stack and jump there if accumulator is 0,
         /// otherwise no-op.
-        jez: usize,
+        jez: void,
         /// Subtract the last value on the stack from the second-to-last value
         /// and put it into the accumulator.
         sub: void,
         /// Add the last and second-to-last value on the stack and put it into
         /// the accumulator.
         add: void,
+        /// Let the scheduler know that there's nothing to do right now.
+        /// Execution will resume after an indeterminate amount of time.
+        yield: void,
         /// Call a non-trivial kernel-provided function. See individual
         /// enum members for details.
         exec: union(enum) {
             /// Pop <arg> bytes from the stack and write them to UART. Do not
             /// assume any particular formatting.
             log: u11,
-            /// Let the scheduler know that there's nothing to do right now.
-            /// Execution will resume after an indeterminate amount of time.
-            yield: void,
+            /// Set up a specific address in the program to be jumped to in
+            /// case a specific notification is issued to the VM. The current
+            /// instruction pointer will be pushed onto the stack. Return using
+            /// jump.
+            subscribe: struct { address: usize, kind: VMNotifKind },
         },
     };
+
+    pub fn format(t: Frame, comptime fmt: []const u8, options: std.fmt.FormatOptions, out_stream: var) !void {
+        const val = if (t.sp == 0) -1 else @as(i16, t.stack[t.sp - 1]);
+        try std.fmt.format(out_stream, "Task(id = {}, ip = {}, sp = {}, acc = {}, [sp-1] = {})", .{ t.id, t.ip, t.sp, t.acc, val });
+    }
 };
 
 comptime {
-    assert(@sizeOf(TaskList.Node) <= heap.page_size);
+    assert(@sizeOf(TaskList.Node) <= heap.page_size); // come on it didn't have to be that big
 }
+
+pub const VMNotifKind = @TagType(VMNotif);
+pub const VMNotif = union(enum) {
+    /// A new character from the UART is available.
+    /// To handle, jump to handler and push data on the stack.
+    uart_data: u8,
+};
 
 /// The task that should get the next compute cycle.
 var active_task: *TaskList.Node = undefined;
@@ -76,8 +97,9 @@ var new_id: u32 = 0;
 var root_task = TaskList.Node.init(.{
     .id = 0,
     .program = &[_]Frame.Instruction{
-        .{ .exec = .{ .yield = {} } },
-        .{ .jump = 0 },
+        .{ .yield = {} },
+        .{ .push_const = 0 },
+        .{ .jump = {} },
     },
 });
 
@@ -90,10 +112,12 @@ pub const ex_1 = [_]Frame.Instruction{
     .{ .push_const = 1 },
     .{ .sub = {} },
     .{ .exec = .{ .log = ex_1_string.len } },
-    .{ .jez = 11 },
-    .{ .exec = .{ .yield = {} } },
+    .{ .push_const = 13 },
+    .{ .jez = {} },
+    .{ .yield = {} },
     .{ .push_const_vec = ex_1_string },
-    .{ .jump = 3 },
+    .{ .push_const = 3 },
+    .{ .jump = {} },
     .{ .exit = {} },
 };
 
@@ -106,11 +130,22 @@ pub const ex_2 = [_]Frame.Instruction{
     .{ .push_const = 1 },
     .{ .sub = {} },
     .{ .exec = .{ .log = ex_2_string.len } },
-    .{ .jez = 11 },
+    .{ .push_const = 13 },
+    .{ .jez = {} },
     .{ .push_const_vec = ex_2_string },
-    .{ .exec = .{ .yield = {} } },
-    .{ .jump = 3 },
+    .{ .yield = {} },
+    .{ .push_const = 3 },
+    .{ .jump = {} },
     .{ .exit = {} },
+};
+
+pub const echo = [_]Frame.Instruction{
+    .{ .exec = .{ .subscribe = .{ .kind = .uart_data, .address = 4 } } },
+    .{ .yield = {} },
+    .{ .push_const = 1 },
+    .{ .jump = {} },
+    .{ .exec = .{ .log = 1 } },
+    .{ .jump = {} },
 };
 
 /// whether or not to spam debug information to UART in methods
@@ -121,6 +156,7 @@ pub fn init() void {
     tasks.prepend(&root_task);
     active_task = &root_task;
     uart.print("  set up root idle task\n", .{});
+    create_task(echo[0..]) catch @panic("Kernel OOM");
 
     create_task(ex_2[0..]) catch @panic("Kernel OOM");
     create_task(ex_1[0..]) catch @panic("Kernel OOM");
@@ -137,9 +173,18 @@ pub fn create_task(program: []const Frame.Instruction) !void {
     tasks.prepend(task);
 }
 
-pub fn rupt() void {
+pub fn notify(data: VMNotif) void {
     if (comptime debug)
         uart.print("hit interrupt.\n", .{});
+    var it = tasks.first;
+    while (it) |*node| : (it = node.*.next) {
+        if (node.*.data.handlers[@enumToInt(data)]) |address| {
+            node.*.data.notifs.append(data) catch @panic("Kernel OOM in virt.notify()");
+        }
+    }
+}
+
+pub fn timer_reschedule() void {
     reschedule(active_task.next);
 }
 
@@ -152,17 +197,32 @@ fn reschedule(next: ?*TaskList.Node) void {
 pub fn run() void {
     while (true) {
         var t = &active_task.data;
+
+        if (t.notifs.items.len > 0) {
+            const notification = t.notifs.orderedRemove(0);
+            t.stack[t.sp] = @intCast(u8, t.ip);
+            t.sp += 1;
+            switch (notification) {
+                .uart_data => |char| {
+                    t.stack[t.sp] = char;
+                    t.sp += 1;
+                },
+            }
+            t.ip = t.handlers[@enumToInt(notification)] orelse unreachable;
+        }
+
         const inst = t.program[t.ip];
         defer {
             if (inst != .jump and inst != .jez) t.ip += 1;
         }
 
-        if (comptime debug) uart.print("executing {} in {}\n", .{ t.program[t.ip], t });
+        if (comptime debug and t.id != 0) uart.print("{}: executing {}\n", .{ t, t.program[t.ip] });
 
         switch (t.program[t.ip]) {
             .noop => {},
-            .jump => |addr| {
-                t.ip = addr;
+            .jump => {
+                t.sp -= 1;
+                t.ip = t.stack[t.sp];
             },
             .push_const => |val| {
                 t.stack[t.sp] = val;
@@ -180,7 +240,9 @@ pub fn run() void {
                 t.sp -= 1;
                 t.acc = t.stack[t.sp];
             },
-            .jez => |addr| {
+            .jez => {
+                t.sp -= 1;
+                const addr = t.stack[t.sp];
                 if (t.acc == 0) {
                     t.ip = addr;
                 } else {
@@ -195,14 +257,17 @@ pub fn run() void {
                 t.sp -= 2;
                 t.acc = t.stack[t.sp] + t.stack[t.sp + 1];
             },
+            .yield => {
+                reschedule(active_task.next);
+            },
             .exec => |command| {
                 switch (command) {
                     .log => |len| {
                         t.sp -= len;
                         uart.print("task {}: {}\n", .{ t.id, t.stack[t.sp .. t.sp + len] });
                     },
-                    .yield => {
-                        reschedule(active_task.next);
+                    .subscribe => |data| {
+                        t.handlers[@enumToInt(data.kind)] = data.address;
                     },
                 }
             },

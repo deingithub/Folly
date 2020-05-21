@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const Uart = @import("./mmio.zig").Uart;
+const virt = @import("./interpreter/vm.zig");
 
 /// Initialize the UART. Should be called very, *very* early. Must
 /// have been called before any write/read occurs.
@@ -61,17 +62,18 @@ fn read() ?u8 {
 /// This gets called by the PLIC handler in rupt/plic.zig
 pub fn handle_interrupt() void {
     const char = read().?;
-    switch (char) {
-        // what enter sends
-        '\r' => {
-            put('\n');
-        },
-        // technically the first one is backspace but everyone uses the second one instead
-        '\x08', '\x7f' => {
-            put('\x08');
-            put(' ');
-            put('\x08');
-        },
-        else => put(char),
-    }
+    virt.notify(.{ .uart_data = char });
+    // switch (char) {
+    //     // what enter sends
+    //     '\r' => {
+    //         put('\n');
+    //     },
+    //     // technically the first one is backspace but everyone uses the second one instead
+    //     '\x08', '\x7f' => {
+    //         put('\x08');
+    //         put(' ');
+    //         put('\x08');
+    //     },
+    //     else => put(char),
+    // }
 }

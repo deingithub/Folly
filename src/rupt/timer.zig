@@ -23,7 +23,7 @@ pub fn handle() void {
         usize,
         CLINT.mtime.read(usize) + clint_hertz / frequency,
     );
-    virt.rupt();
+    virt.timer_reschedule();
 }
 
 pub fn uptime() usize {

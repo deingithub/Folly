@@ -31,5 +31,9 @@ export fn kmain() noreturn {
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
     uart.print("Kernel Panic: {}\nIt's now safe to turn off your computer.\n", .{msg});
-    while (true) {}
+    asm volatile (
+        \\csrw mie, zero
+        \\j youspinmeround
+    );
+    unreachable;
 }
