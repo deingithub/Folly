@@ -11,4 +11,36 @@ pub fn build(b: *Builder) !void {
     exe.setLinkerScriptPath("linker.ld");
     exe.setBuildMode(.Debug);
     exe.install();
+
+    const run = b.addSystemCommand(&[_][]const u8{
+        blk: {
+            if (b.env_map.get("QEMU_EXE")) |path| {
+                if (std.mem.endsWith(u8, path, "qemu-system-riscv64")) break :blk path;
+            }
+            std.debug.warn("Please specify the path to `qemu-system-riscv64` in the environment variable QEMU_EXE.\n", .{});
+            return error.MissingQEMU;
+        },
+        "-kernel",
+    });
+    run.addArtifactArg(exe);
+    run.addArgs(&qemu_args);
+
+    const i_dont_know_what_im_doing_help = b.step("run", "Build and launch Folly in QEMU");
+    i_dont_know_what_im_doing_help.dependOn(&run.step);
 }
+
+// zig fmt: off
+const qemu_args = [_][]const u8{
+    "-machine", "virt",
+    "-cpu", "rv64",
+    "-smp", "4",
+    "-m", "512M",
+    "-nographic",
+    "-serial", "mon:stdio",
+    "-bios", "none",
+    "-drive", "if=none,format=raw,file=hdd.img,id=foo",
+    "-device", "virtio-blk-device,scsi=off,drive=foo",
+    "-no-reboot",
+    "-no-shutdown",
+};
+// zig fmt: on

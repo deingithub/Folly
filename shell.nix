@@ -10,25 +10,10 @@ mkShell rec {
     dd if=/dev/zero of=hdd.img bs=1M count=32 status=none
     alias xgdb='${import ./cross-utils/gdb}/bin/riscv64-gdb'
     alias xobjdump='${import ./cross-utils/binutils}/riscv64-elf/bin/objdump'
-    alias run='${qemu}/bin/qemu-system-riscv64 ${
-      lib.strings.concatStringsSep " " qemuArgs
-    }'
+    export QEMU_EXE=${qemu}/bin/qemu-system-riscv64
+
     echo "Check if you have a recent-ish (as of March 2020) master build of zig installed."
     echo "You and I both know that it's not stable."
     echo Godspeed.
   '';
-  qemuArgs = [
-    "-machine virt"
-    "-cpu rv64"
-    "-smp 4"
-    "-m 512M"
-    "-nographic"
-    "-serial mon:stdio"
-    "-bios none"
-    "-kernel zig-cache/bin/Folly"
-    "-drive if=none,format=raw,file=hdd.img,id=foo"
-    "-device virtio-blk-device,scsi=off,drive=foo"
-    "-no-reboot"
-    "-no-shutdown"
-  ];
 }

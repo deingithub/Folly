@@ -8,12 +8,12 @@ Technically you only need the latter but the former does a lot of important stuf
 
 ### Executive Summary
 
-Wow I can't decide if that sounds more self-important or soulless. I'll keep it for now, it is apt in either case. The kernel entry point is in `src/startup.asm`, which does some setup and hands over to `src/main.zig`'s `kmain()`. It goes downhill from there. Currently Folly can receive interrupts, allocate heap memory in page sized chunks and write to and read from the UART. Planned features include a userspace exclusively implemented in an interpreted language, (if possible in QEMU, TODO figure this out) graphics support for a vaguely Oberon-inspired textual user interface, and an overall oppressive and impersonal atmosphere.
+Wow I can't decide if that sounds more self-important or soulless. I'll keep it for now, it is apt in either case. The kernel entry point is in `src/startup.asm`, which does some setup and hands over to `src/main.zig`'s `kmain()`. It goes downhill from there. Currently Folly can receive interrupts, allocate heap memory in page sized chunks and write to and read from the UART. Planned features include a userspace exclusively implemented in an interpreted language (probably going to be WASM), graphics support for a vaguely Oberon-inspired textual user interface (if that's possible with QEMU currently), and an overall oppressive and impersonal atmosphere.
 
 
 ### Hacking
 
 ```sh
 nix-shell # this installs a metric fuckton of version-locked tools courtesy of nixpkgs
-zig build && run # this builds the kernel and runs it in qemu
+zig build run # this builds the kernel and runs it in qemu
 ```
