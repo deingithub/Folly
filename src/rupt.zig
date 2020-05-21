@@ -7,11 +7,6 @@ const heap = @import("./heap.zig");
 pub const Timer = @import("./rupt/timer.zig");
 pub const PLIC = @import("./rupt/plic.zig");
 
-comptime {
-    std.debug.assert(@sizeOf(TrapFrame) == 272);
-    asm (@embedFile("./rupt.asm"));
-}
-
 /// Initialize all necessary values. Must be called as early as possible
 /// after UART is available.
 pub fn init() void {
@@ -36,7 +31,69 @@ export var kframe linksection(".bss") = TrapFrame{
     .hartid = 0,
 };
 
-/// The assembly interrupt vector jumps here.
+/// The interrupt vector that the processor jumps to
+export fn rupt() align(4) callconv(.Naked) void {
+    comptime {
+        std.debug.assert(@sizeOf(TrapFrame) == 272); // when this fails, adjust the code below!
+    }
+
+    // atomically swap trap frame address into t6
+    asm volatile ("csrrw t6, mscratch, t6");
+
+    // save first 31 general purpose registers into the trap frame
+    comptime var save_reg = 0;
+    inline while (save_reg < 31) : (save_reg += 1) {
+        @setEvalBranchQuota(5700);
+        comptime var buf = [_]u8{0} ** 32;
+        asm volatile (comptime std.fmt.bufPrint(
+            &buf,
+            "sd x{}, {}(t6)",
+            .{ save_reg, save_reg * 8 },
+        ) catch unreachable);
+    }
+    // save register x31
+    asm volatile (
+        \\mv t5, t6
+        \\sd t6, 31*8(t5)
+        \\csrw mscratch, t5
+    );
+    // clean slate. set up arguments and call the main handler
+    asm volatile (
+        \\csrr a0, mcause
+        \\csrr a1, mepc
+        \\csrr a2, mtval
+        \\csrr a3, mscratch
+    );
+    asm volatile (
+        \\ld sp, 256(a3)
+        \\call zig_rupt
+    );
+
+    // write return program counter from handler and get our trap frame back
+    asm volatile (
+        \\csrw mepc, a0
+        \\csrr t6, mscratch
+    );
+
+    // restore all general purpose registers
+    comptime var load_reg = 0;
+    inline while (load_reg < 32) : (load_reg += 1) {
+        @setEvalBranchQuota(10800);
+        comptime var buf = [_]u8{0} ** 32;
+        asm volatile (comptime std.fmt.bufPrint(
+            &buf,
+            "ld x{}, {}(t6)",
+            .{ load_reg, load_reg * 8 },
+        ) catch unreachable);
+    }
+
+    asm volatile (
+        \\mret
+    );
+    unreachable;
+}
+
+/// The actual interrupt vector above jumps here for high-level processing of the interrupt.
 export fn zig_rupt(cause: usize, epc: usize, tval: usize, frame: *TrapFrame) callconv(.C) usize {
     const is_async = @clz(usize, cause) == 0;
 

@@ -46,7 +46,7 @@ _start:
     la t1, kmain
     csrw mepc, t1
     # set up interrupt handler
-    la t2, asm_rupt
+    la t2, rupt
     csrw mtvec, t2
     la t2, kframe
     csrw mscratch, t2
