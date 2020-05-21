@@ -138,6 +138,7 @@ pub fn create_task(program: []const Frame.Instruction) !void {
 pub fn notify(data: VMNotif) void {
     if (comptime debug)
         uart.print("notify: received {}\n", .{data});
+
     var it = tasks.first;
     while (it) |*node| : (it = node.*.next) {
         if (node.*.data.handlers[@enumToInt(data)]) |address| {

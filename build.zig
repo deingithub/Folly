@@ -21,7 +21,7 @@ pub fn build(b: *Builder) !void {
         exe.addBuildOption(
             bool,
             "log_" ++ opt,
-            log_all or b.option(bool, "log-" ++ opt, "Spam logging for this particular thing to UART") orelse false,
+            b.option(bool, "log-" ++ opt, "Spam logging for this particular thing to UART") orelse log_all,
         );
     }
 
