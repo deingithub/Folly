@@ -6,6 +6,7 @@ const heap = @import("./heap.zig");
 const rupt = @import("./rupt.zig");
 const interpreter = @import("./interpreter.zig");
 const options = @import("build_options");
+const SGR = uart.ANSIFormat.SGR;
 
 comptime {
     // startup code, I can't be bothered to modify build.zig for this
@@ -19,7 +20,6 @@ export fn kmain() noreturn {
     rupt.init();
     interpreter.init();
 
-    const SGR = uart.ANSIFormat.SGR;
     uart.print(
         \\Welcome to {}.
         \\{} for statistics
@@ -46,7 +46,14 @@ export fn kmain() noreturn {
 // TODO implement stacktraces: https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
 pub fn panic(msg: []const u8, error_return_trace: ?*builtin.StackTrace) noreturn {
     @setCold(true);
-    uart.print("Kernel Panic: {}\nIt's now safe to turn off your computer.\n", .{msg});
+    uart.print(
+        \\
+        \\{} {}
+        \\It's now safe to turn off your computer.
+        \\
+    ,
+        .{ SGR.render("Kernel Panic", SGR.RenderOpts{ .bold = true }), msg },
+    );
     asm volatile (
         \\csrw mie, zero
         \\j youspinmeround

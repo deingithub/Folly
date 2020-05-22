@@ -98,6 +98,7 @@ pub const shell = struct {
         var previous_state: @TypeOf(state) = undefined;
 
         pub fn activate() void {
+            if (state == .task_switching) return;
             previous_state = state;
             state = .task_switching;
 
