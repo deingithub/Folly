@@ -1,4 +1,4 @@
-const Frame = @import("./vm.zig").Frame;
+const Frame = @import("./Frame.zig");
 
 const ex_1_string = "Did you know that world-renowned writer Stephen King was once hit by a car?";
 pub const did_you_know = [_]Frame.Instruction{
