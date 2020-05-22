@@ -43,6 +43,5 @@ pub const echo = [_]Frame.Instruction{
     .{ .push_const = 2 },
     .{ .jump = {} },
     .{ .exec = .{ .log = 1 } },
-    .{ .exec = .{ .set_waiting = true } },
     .{ .jump = {} },
 };
