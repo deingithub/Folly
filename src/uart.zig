@@ -106,28 +106,28 @@ pub const ANSIFormat = struct {
             }
         };
 
-        // this is currently bugged. I think so, at least. TODO figure it out
-        // pub const RenderOpts = struct {
-        //     bold: bool = false,
-        //     italic: bool = false,
-        //     underline: bool = false,
-        //     fg: ?SGR.Color = null,
-        //     bg: ?SGR.Color = null,
-        // };
-        // pub fn render(comptime str: []const u8, comptime opts: RenderOpts) []const u8 {
-        //     comptime var buf = [_]u8{0} ** (str.len + 64);
-        //     const fmt_bold = if (opts.bold) bold else "";
-        //     const fmt_italic = if (opts.italic) italic else "";
-        //     const fmt_underline = if (opts.underline) underline else "";
-        //     const fmt_fg = if (opts.fg) |color| set_fg ++ color.string() else "";
-        //     const fmt_bg = if (opts.bg) |color| set_bg ++ color.string() else "";
+        pub const RenderOpts = struct {
+            bold: bool = false,
+            italic: bool = false,
+            underline: bool = false,
+            fg: ?SGR.Color = null,
+            bg: ?SGR.Color = null,
+        };
+        pub fn render(comptime str: []const u8, comptime opts: RenderOpts) []const u8 {
+            comptime var buf = [_]u8{0} ** (str.len + 64);
+            const fmt_bold = if (opts.bold) bold else "";
+            const fmt_italic = if (opts.italic) italic else "";
+            const fmt_underline = if (opts.underline) underline else "";
+            const fmt_fg = if (opts.fg) |color| set_fg ++ color.string() else "";
+            const fmt_bg = if (opts.bg) |color| set_bg ++ color.string() else "";
 
-        //     return comptime std.fmt.bufPrint(
-        //         &buf,
-        //         "{}{}{}{}{}{}{}",
-        //         .{ fmt_bold, fmt_italic, fmt_underline, fmt_fg, fmt_bg, str, reset },
-        //     ) catch unreachable;
-        // }
+            return comptime std.fmt.bufPrint(
+                &buf,
+                // these look so sad as a workaround for ziglang/zig#5401
+                "{:<}{:<}{:<}{:<}{:<}{:<}{:<}",
+                .{ fmt_bold, fmt_italic, fmt_underline, fmt_fg, fmt_bg, str, reset },
+            ) catch unreachable;
+        }
     };
 };
 
@@ -187,7 +187,7 @@ pub fn handle_interrupt() void {
 fn handle_escape_sequence(data: []const u8) void {
     switch (explain_escape_sequence(data).?) {
         .F1 => {
-            print("woo yeah it's a fucking task switcher\n", .{});
+            virt.switch_tasks();
         },
         .F9 => {
             @panic("you have no one to blame but yourself");

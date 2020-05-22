@@ -73,6 +73,8 @@ pub fn notify(data: VMNotif) void {
     }
 }
 
+pub fn switch_tasks() void {}
+
 pub fn schedule() void {
     const my_debug = @import("build_options").log_sched;
     if (comptime my_debug)

@@ -21,14 +21,16 @@ export fn kmain() noreturn {
 
     const SGR = uart.ANSIFormat.SGR;
     uart.print(
-        \\Welcome to {}The Folly of Cass{}.
-        \\{}[F1]{} to switch tasks
-        \\{}[F9]{} to shut down
+        \\Welcome to {}.
+        \\{} to switch tasks
+        \\{} to shut down
         \\
         \\Godspeed.
         \\
     , .{
-        SGR.set_fg ++ SGR.Color.Yellow, SGR.reset, SGR.bold, SGR.reset, SGR.bold, SGR.reset,
+        SGR.render("The Folly of Cass", SGR.RenderOpts{ .fg = .yellow }),
+        SGR.render("[F1]", SGR.RenderOpts{ .bold = true }),
+        SGR.render("[F9]", SGR.RenderOpts{ .bold = true }),
     });
 
     if (options.log_vm)
