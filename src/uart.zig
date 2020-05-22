@@ -62,6 +62,74 @@ fn read() ?u8 {
     }
 }
 
+/// Shamelessly stolen from Wikipedia, useful ANSI sequences
+pub const ANSIFormat = struct {
+    pub const CSI = "\x1b[";
+    pub const SGR = struct {
+        pub const reset = CSI ++ "0m";
+        pub const bold = CSI ++ "1m";
+        pub const italic = CSI ++ "3m";
+        pub const underline = CSI ++ "4m";
+
+        pub const set_fg = CSI ++ "38;5;";
+        pub const set_bg = CSI ++ "48;5;";
+        pub const Color = enum {
+            black,
+            red,
+            green,
+            yellow,
+            blue,
+            magenta,
+            cyan,
+            white,
+
+            pub const Black = "0m";
+            pub const Red = "1m";
+            pub const Green = "2m";
+            pub const Yellow = "3m";
+            pub const Blue = "4m";
+            pub const Magenta = "5m";
+            pub const Cyan = "6m";
+            pub const White = "7m";
+
+            pub fn string(self: Color) []const u8 {
+                return switch (self) {
+                    .black => Black,
+                    .red => Red,
+                    .green => Green,
+                    .yellow => Yellow,
+                    .blue => Blue,
+                    .magenta => Magenta,
+                    .cyan => Cyan,
+                    .white => White,
+                };
+            }
+        };
+
+        // this is currently bugged. I think so, at least. TODO figure it out
+        // pub const RenderOpts = struct {
+        //     bold: bool = false,
+        //     italic: bool = false,
+        //     underline: bool = false,
+        //     fg: ?SGR.Color = null,
+        //     bg: ?SGR.Color = null,
+        // };
+        // pub fn render(comptime str: []const u8, comptime opts: RenderOpts) []const u8 {
+        //     comptime var buf = [_]u8{0} ** (str.len + 64);
+        //     const fmt_bold = if (opts.bold) bold else "";
+        //     const fmt_italic = if (opts.italic) italic else "";
+        //     const fmt_underline = if (opts.underline) underline else "";
+        //     const fmt_fg = if (opts.fg) |color| set_fg ++ color.string() else "";
+        //     const fmt_bg = if (opts.bg) |color| set_bg ++ color.string() else "";
+
+        //     return comptime std.fmt.bufPrint(
+        //         &buf,
+        //         "{}{}{}{}{}{}{}",
+        //         .{ fmt_bold, fmt_italic, fmt_underline, fmt_fg, fmt_bg, str, reset },
+        //     ) catch unreachable;
+        // }
+    };
+};
 /// This gets called by the PLIC handler in rupt/plic.zig
 pub fn handle_interrupt() void {
     const char = read().?;

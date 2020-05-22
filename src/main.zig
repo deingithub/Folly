@@ -19,7 +19,17 @@ export fn kmain() noreturn {
     rupt.init();
     virt.init();
 
-    uart.print("Welcome to The Folly of Cass. Godspeed.\n\n", .{});
+    const SGR = uart.ANSIFormat.SGR;
+    uart.print(
+        \\Welcome to {}The Folly of Cass{}.
+        \\{}[F1]{} to switch tasks
+        \\{}[F9]{} to shut down
+        \\
+        \\Godspeed.
+        \\
+    , .{
+        SGR.set_fg ++ SGR.Color.Yellow, SGR.reset, SGR.bold, SGR.reset, SGR.bold, SGR.reset,
+    });
 
     if (options.log_vm)
         uart.print("  handover to interpreter...\n", .{});
