@@ -5,6 +5,7 @@ const assert = std.debug.assert;
 
 const heap = @import("../heap.zig");
 const virt = @import("./vm.zig");
+const notification = @import("./notification.zig");
 
 pub const List = std.SinglyLinkedList(@This());
 
@@ -21,9 +22,9 @@ id: u32,
 /// A list of instructions to execute
 program: []const Instruction,
 /// Pending Notifications
-notifs: std.ArrayList(virt.VMNotif) = std.ArrayList(virt.VMNotif).init(&heap.kpagealloc),
+notifs: std.ArrayList(notification.VMNotif) = std.ArrayList(notification.VMNotif).init(&heap.kpagealloc),
 /// Handler addresses for notifications
-handlers: [@typeInfo(virt.VMNotifKind).Enum.fields.len]?usize = [_]?usize{null} ** @typeInfo(virt.VMNotifKind).Enum.fields.len,
+handlers: [@typeInfo(notification.VMNotifKind).Enum.fields.len]?usize = [_]?usize{null} ** @typeInfo(notification.VMNotifKind).Enum.fields.len,
 /// Whether or not the task is doing nothing but waiting for a notification to happen
 waiting: bool = false,
 
@@ -64,7 +65,7 @@ pub const Instruction = union(enum) {
         /// case a specific notification is issued to the VM. The current
         /// instruction pointer will be pushed onto the stack. Return using
         /// jump.
-        subscribe: struct { address: usize, kind: virt.VMNotifKind },
+        subscribe: struct { address: usize, kind: notification.VMNotifKind },
         /// Set the task's waiting status. Waiting tasks will only be
         /// resumed when a notification they have subscribed to
         /// is generated, after which set_waiting has to be issued again.

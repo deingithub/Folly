@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const Uart = @import("./mmio.zig").Uart;
-const virt = @import("./interpreter/vm.zig");
+const virt = @import("./interpreter.zig");
 
 const debug = @import("build_options").log_uart;
 
@@ -185,6 +185,7 @@ pub fn handle_interrupt() void {
 
 /// What to do when we find any escape sequence. Called by handle_interrupt.
 fn handle_escape_sequence(data: []const u8) void {
+    if (comptime debug) print("uart: handling escape sequence {x}\n", .{data});
     switch (explain_escape_sequence(data).?) {
         .F1 => {
             virt.switch_tasks();

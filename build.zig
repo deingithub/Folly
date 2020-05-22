@@ -3,7 +3,7 @@ const Builder = std.build.Builder;
 const CrossTarget = std.zig.CrossTarget;
 
 const log_options = [_][]const u8{
-    "vm", "sched", "clint", "plic", "heap", "rupt", "uart",
+    "vm", "sched", "clint", "plic", "heap", "rupt", "uart", "notify",
 };
 
 pub fn build(b: *Builder) !void {

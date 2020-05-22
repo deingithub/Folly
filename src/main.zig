@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const uart = @import("./uart.zig");
 const heap = @import("./heap.zig");
 const rupt = @import("./rupt.zig");
-const virt = @import("/interpreter/vm.zig");
+const interpreter = @import("./interpreter.zig");
 const options = @import("build_options");
 
 comptime {
@@ -17,7 +17,7 @@ export fn kmain() noreturn {
     uart.init();
     heap.init();
     rupt.init();
-    virt.init();
+    interpreter.init();
 
     const SGR = uart.ANSIFormat.SGR;
     uart.print(
@@ -33,10 +33,8 @@ export fn kmain() noreturn {
         SGR.render("[F9]", SGR.RenderOpts{ .bold = true }),
     });
 
-    if (options.log_vm)
-        uart.print("  handover to interpreter...\n", .{});
-
-    virt.run();
+    if (options.log_vm) uart.print("handover to interpreter...\n", .{});
+    interpreter.run();
 
     asm volatile ("j youspinmeround");
     unreachable;

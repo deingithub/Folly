@@ -3,7 +3,7 @@
 const std = @import("std");
 const uart = @import("../uart.zig");
 
-const virt = @import("../interpreter/vm.zig");
+const virt = @import("../interpreter.zig");
 const mmio = @import("../mmio.zig");
 const CLINT = mmio.CLINT;
 
