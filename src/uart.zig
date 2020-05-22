@@ -130,21 +130,87 @@ pub const ANSIFormat = struct {
         // }
     };
 };
+
+/// A stack for temporarily storing things that look like escape sequences
+var input_stack = [_]u8{0} ** 8;
+var input_stack_top: u8 = 0;
+
+/// What we're doing currently.
+var state: enum {
+    passthru,
+    seen_escape,
+    task_switching,
+} = .passthru;
+
 /// This gets called by the PLIC handler in rupt/plic.zig
 pub fn handle_interrupt() void {
+    const eql = std.mem.eql;
+
     const char = read().?;
-    virt.notify(.{ .uart_data = char });
-    // switch (char) {
-    //     // what enter sends
-    //     '\r' => {
-    //         put('\n');
-    //     },
-    //     // technically the first one is backspace but everyone uses the second one instead
-    //     '\x08', '\x7f' => {
-    //         put('\x08');
-    //         put(' ');
-    //         put('\x08');
-    //     },
-    //     else => put(char),
-    // }
+
+    if (char == '\x1b')
+        state = .seen_escape;
+
+    switch (state) {
+        .passthru => virt.notify(.{ .uart_data = char }),
+        .seen_escape => {
+            if (comptime debug)
+                print("uart: seen escape, this char is {x}\n", .{char});
+
+            var maybe_found = false;
+            input_stack[input_stack_top] = char;
+            input_stack_top += 1;
+
+            for (known_escapes) |seq| {
+                if (input_stack_top > seq.len) continue;
+                if (std.mem.eql(u8, seq[0..input_stack_top], input_stack[0..input_stack_top])) {
+                    maybe_found = true;
+                    if (seq.len == input_stack_top) {
+                        handle_escape_sequence(input_stack[0..input_stack_top]);
+                    }
+                    break;
+                }
+            }
+
+            if (!maybe_found) {
+                if (comptime debug)
+                    print("uart: this couldn't possibly be a known escape\n", .{});
+                for (input_stack[0..input_stack_top]) |ch| virt.notify(.{ .uart_data = ch });
+                input_stack_top = 0;
+            }
+        },
+        .task_switching => {},
+    }
+}
+
+/// What to do when we find any escape sequence. Called by handle_interrupt.
+fn handle_escape_sequence(data: []const u8) void {
+    switch (explain_escape_sequence(data).?) {
+        .F1 => {
+            print("woo yeah it's a fucking task switcher\n", .{});
+        },
+        .F9 => {
+            @panic("you have no one to blame but yourself");
+        },
+    }
+    input_stack_top = 0;
+    state = .passthru;
+}
+
+/// All escape sequence variants we care about
+const known_escapes = [_][]const u8{
+    "\x1bOP", "\x1b[11~", "\x1bOw", "\x1b[20~",
+};
+/// Turns out there are more than one representation for some sequences. Yay.
+/// This function takes a slice and checks if it is one that we care about,
+/// returning a self-descriptive enum variant or null if it just isn't.
+fn explain_escape_sequence(data: []const u8) ?enum { F1, F9 } {
+    const eql = std.mem.eql;
+    if (eql(u8, data, "\x1bOP") or eql(u8, data, "\x1b[11~")) {
+        return .F1;
+    } else if (eql(u8, data, "\x1bOw") or eql(u8, data, "\x1b[20~")) {
+        return .F9;
+    }
+
+    return null;
 }
