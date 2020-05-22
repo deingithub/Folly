@@ -8,18 +8,18 @@ const assert = std.debug.assert;
 fn MMIO(comptime T: type) type {
     return struct {
         pub fn write(self: T, comptime U: type, data: U) void {
-            write_offset(self, U, 0, data);
+            writeOffset(self, U, 0, data);
         }
         pub fn read(self: T, comptime U: type) U {
-            return read_offset(self, U, 0);
+            return readOffset(self, U, 0);
         }
 
-        pub fn write_offset(self: T, comptime U: type, offset: usize, data: U) void {
+        pub fn writeOffset(self: T, comptime U: type, offset: usize, data: U) void {
             comptime assert(@typeInfo(U) == .Int);
             const ptr = @intToPtr([*]volatile U, @enumToInt(self));
             ptr[offset] = data;
         }
-        pub fn read_offset(self: T, comptime U: type, offset: usize) U {
+        pub fn readOffset(self: T, comptime U: type, offset: usize) U {
             comptime assert(@typeInfo(U) == .Int);
             const ptr = @intToPtr([*]volatile U, @enumToInt(self));
             return ptr[offset];

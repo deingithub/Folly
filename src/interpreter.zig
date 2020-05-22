@@ -64,7 +64,7 @@ pub fn destroyTask(task: *Frame.List.Node) void {
 /// Hand over control of this hart to the VM.
 pub fn run() void {
     while (true) {
-        vm.one_step(active_task);
+        vm.step(active_task);
     }
 }
 

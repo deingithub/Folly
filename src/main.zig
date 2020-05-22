@@ -22,6 +22,7 @@ export fn kmain() noreturn {
     const SGR = uart.ANSIFormat.SGR;
     uart.print(
         \\Welcome to {}.
+        \\{} to scream for God. They will not answer.
         \\{} to switch tasks
         \\{} to shut down
         \\Godspeed.
@@ -30,6 +31,7 @@ export fn kmain() noreturn {
     , .{
         SGR.render("The Folly of Cass", SGR.RenderOpts{ .fg = .yellow }),
         SGR.render("[F1]", SGR.RenderOpts{ .bold = true }),
+        SGR.render("[F2]", SGR.RenderOpts{ .bold = true }),
         SGR.render("[F9]", SGR.RenderOpts{ .bold = true }),
     });
 

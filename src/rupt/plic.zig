@@ -23,7 +23,7 @@ pub fn init() void {
             usize,
             PLIC.enable.read(usize) | @as(usize, 0b1) << interrupt.id,
         );
-        PLIC.priority.write_offset(
+        PLIC.priority.writeOffset(
             u3,
             4 * interrupt.id,
             interrupt.priority,
@@ -49,7 +49,7 @@ pub fn handle() void {
     const id = claim().?;
 
     switch (id) {
-        10 => uart.handle_interrupt(),
+        10 => uart.handleInterrupt(),
         else => {
             var buf = [_]u8{0} ** 128;
 

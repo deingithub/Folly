@@ -47,17 +47,17 @@ var descriptors: []volatile Page = undefined;
 
 /// This mirrors std.heap.page_allocator in that it always allocates at least one page
 pub var kpagealloc = std.mem.Allocator{
-    .reallocFn = kpagealloc_realloc,
-    .shrinkFn = kpagealloc_shrink,
+    .reallocFn = kPageAllocRealloc,
+    .shrinkFn = kPageAllocShrink,
 };
-fn kpagealloc_realloc(self: *std.mem.Allocator, old_mem: []u8, old_alignment: u29, new_byte_count: usize, new_alignment: u29) std.mem.Allocator.Error![]u8 {
+fn kPageAllocRealloc(self: *std.mem.Allocator, old_mem: []u8, old_alignment: u29, new_byte_count: usize, new_alignment: u29) std.mem.Allocator.Error![]u8 {
     if (comptime debug)
-        uart.print("kpagealloc_realloc invoked: old_mem {}:{}, new_byte_count {}\n", .{ old_mem.ptr, old_mem.len, new_byte_count });
+        uart.print("kPageAllocRealloc invoked: old_mem {}:{}, new_byte_count {}\n", .{ old_mem.ptr, old_mem.len, new_byte_count });
 
     if (new_alignment > page_size) return error.OutOfMemory; // why would you even
     if (old_mem.len == 0 or new_byte_count > page_size) {
         // create a new allocation
-        const ptr = (try alloc_pages((new_byte_count / page_size) + 1))[0..new_byte_count];
+        const ptr = (try allocPages((new_byte_count / page_size) + 1))[0..new_byte_count];
         // move pre-existing allocation if it exists
         for (old_mem) |b, i| ptr[i] = b;
         return ptr;
@@ -69,20 +69,20 @@ fn kpagealloc_realloc(self: *std.mem.Allocator, old_mem: []u8, old_alignment: u2
             return @ptrCast([*]u8, old_mem)[0..new_byte_count];
         } else {
             // we have extra pages left over
-            return kpagealloc_shrink(self, old_mem, old_alignment, new_byte_count, new_alignment);
+            return kPageAllocShrink(self, old_mem, old_alignment, new_byte_count, new_alignment);
         }
     }
     return error.OutOfMemory;
 }
-fn kpagealloc_shrink(self: *std.mem.Allocator, old_mem: []u8, old_alignment: u29, new_byte_count: usize, new_alignment: u29) []u8 {
+fn kPageAllocShrink(self: *std.mem.Allocator, old_mem: []u8, old_alignment: u29, new_byte_count: usize, new_alignment: u29) []u8 {
     if (comptime debug)
-        uart.print("kpagealloc_shrink invoked: old_mem {}:{}, new_byte_count {}\n", .{ old_mem.ptr, old_mem.len, new_byte_count });
+        uart.print("kPageAllocShrink invoked: old_mem {}:{}, new_byte_count {}\n", .{ old_mem.ptr, old_mem.len, new_byte_count });
 
     if (new_byte_count == 0 or old_mem.len / page_size > new_byte_count / page_size) {
         // free pages at the end
         const free_start = (@ptrToInt(old_mem.ptr) + new_byte_count) + ((@ptrToInt(old_mem.ptr) + new_byte_count) % page_size);
         const free_size = old_mem.len - new_byte_count;
-        free_pages(@intToPtr([*]u8, free_start)[0..free_size]);
+        freePages(@intToPtr([*]u8, free_start)[0..free_size]);
     }
     return old_mem[0..new_byte_count];
 }
@@ -126,11 +126,11 @@ pub fn init() void {
 }
 
 /// Allocate `num` pages, returning a zeroed slice of memory or error.OutOfMemory.
-pub fn alloc_pages(num: usize) ![]u8 {
+pub fn allocPages(num: usize) ![]u8 {
     if (comptime debug)
         uart.print("alloc_pages invoked with num {}\n", .{num});
     defer {
-        if (comptime debug) dump_page_table();
+        if (comptime debug) dumpPageTable();
     }
 
     assert(num > 0);
@@ -163,11 +163,11 @@ pub fn alloc_pages(num: usize) ![]u8 {
 
 /// Returns pages into the pool of available pages and zeroes them out. Doesn't fail.
 /// Pointer must be one that's been returned from heap.alloc_pages().
-pub fn free_pages(ptr: []u8) void {
+pub fn freePages(ptr: []u8) void {
     if (comptime debug)
         uart.print("free_pages invoked with ptr {}:{}\n", .{ ptr.ptr, ptr.len });
     defer {
-        if (comptime debug) dump_page_table();
+        if (comptime debug) dumpPageTable();
     }
 
     assert(@ptrToInt(ptr.ptr) % page_size == 0);
@@ -181,7 +181,7 @@ pub fn free_pages(ptr: []u8) void {
     for (ptr) |*b| b.* = 0;
 }
 
-fn dump_page_table() void {
+fn dumpPageTable() void {
     for (descriptors) |desc, id| {
         if (desc.is_taken()) uart.print("0x{x:0>3}\t{b:0>8}\n", .{ id, desc.flags });
     }

@@ -143,7 +143,7 @@ var state: enum {
 } = .passthru;
 
 /// This gets called by the PLIC handler in rupt/plic.zig
-pub fn handle_interrupt() void {
+pub fn handleInterrupt() void {
     const eql = std.mem.eql;
 
     const char = read().?;
@@ -166,7 +166,7 @@ pub fn handle_interrupt() void {
                 if (std.mem.eql(u8, seq[0..input_stack_top], input_stack[0..input_stack_top])) {
                     maybe_found = true;
                     if (seq.len == input_stack_top) {
-                        handle_escape_sequence(input_stack[0..input_stack_top]);
+                        handleEscapeSequence(input_stack[0..input_stack_top]);
                     }
                     break;
                 }
@@ -184,10 +184,11 @@ pub fn handle_interrupt() void {
 }
 
 /// What to do when we find any escape sequence. Called by handle_interrupt.
-fn handle_escape_sequence(data: []const u8) void {
+fn handleEscapeSequence(data: []const u8) void {
     if (comptime debug) print("uart: handling escape sequence {x}\n", .{data});
-    switch (explain_escape_sequence(data).?) {
-        .F1 => {
+    switch (explainEscapeSequence(data).?) {
+        .F1 => {},
+        .F2 => {
             virt.shell.activateTaskSwitcher();
         },
         .F9 => {
@@ -200,15 +201,17 @@ fn handle_escape_sequence(data: []const u8) void {
 
 /// All escape sequence variants we care about
 const known_escapes = [_][]const u8{
-    "\x1bOP", "\x1b[11~", "\x1bOw", "\x1b[20~",
+    "\x1bOP", "\x1b[11~", "\x1bOw", "\x1b[20~", "\x1bOQ", "\x1b[12~",
 };
 /// Turns out there are more than one representation for some sequences. Yay.
 /// This function takes a slice and checks if it is one that we care about,
 /// returning a self-descriptive enum variant or null if it just isn't.
-fn explain_escape_sequence(data: []const u8) ?enum { F1, F9 } {
+fn explainEscapeSequence(data: []const u8) ?enum { F1, F2, F9 } {
     const eql = std.mem.eql;
     if (eql(u8, data, "\x1bOP") or eql(u8, data, "\x1b[11~")) {
         return .F1;
+    } else if (eql(u8, data, "\x1bOQ") or eql(u8, data, "\x1b[12~")) {
+        return .F2;
     } else if (eql(u8, data, "\x1bOw") or eql(u8, data, "\x1b[20~")) {
         return .F9;
     }

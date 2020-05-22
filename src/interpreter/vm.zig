@@ -12,7 +12,7 @@ const Frame = @import("./Frame.zig");
 
 const debug = @import("build_options").log_vm;
 
-pub fn one_step(frame: *Frame.List.Node) void {
+pub fn step(frame: *Frame.List.Node) void {
     var t = &frame.data;
     // this shouldn't happen unless we return from a state where
     // all tasks were waiting
