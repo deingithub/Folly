@@ -2,7 +2,8 @@
 
 const std = @import("std");
 const Uart = @import("./mmio.zig").Uart;
-const virt = @import("./interpreter.zig");
+const interpreter = @import("./interpreter.zig");
+const heap = @import("./heap.zig");
 
 const debug = @import("build_options").log_uart;
 
@@ -61,7 +62,6 @@ fn read() ?u8 {
         return null;
     }
 }
-
 /// Shamelessly stolen from Wikipedia, useful ANSI sequences
 pub const ANSIFormat = struct {
     pub const CSI = "\x1b[";
@@ -152,7 +152,7 @@ pub fn handleInterrupt() void {
         state = .seen_escape;
 
     switch (state) {
-        .passthru => virt.notify(.{ .uart_data = char }),
+        .passthru => interpreter.notify(.{ .uart_data = char }),
         .seen_escape => {
             if (comptime debug)
                 print("uart: seen escape, this char is {x}\n", .{char});
@@ -175,7 +175,7 @@ pub fn handleInterrupt() void {
             if (!maybe_found) {
                 if (comptime debug)
                     print("uart: this couldn't possibly be a known escape\n", .{});
-                for (input_stack[0..input_stack_top]) |ch| virt.notify(.{ .uart_data = ch });
+                for (input_stack[0..input_stack_top]) |ch| interpreter.notify(.{ .uart_data = ch });
                 input_stack_top = 0;
             }
         },
@@ -187,9 +187,26 @@ pub fn handleInterrupt() void {
 fn handleEscapeSequence(data: []const u8) void {
     if (comptime debug) print("uart: handling escape sequence {x}\n", .{data});
     switch (explainEscapeSequence(data).?) {
-        .F1 => {},
+        .F1 => {
+            print(
+                \\
+                \\{}
+                \\  heap:     {}/{} pages used
+                \\  tasks:    {}
+                \\  fg task:  {}
+                \\
+            ,
+                .{
+                    ANSIFormat.SGR.render("Statistics", ANSIFormat.SGR.RenderOpts{ .bold = true }),
+                    heap.statistics(.pages_taken),
+                    heap.statistics(.pages_total),
+                    interpreter.statistics(.tasks_total),
+                    interpreter.shell.foreground_task.data.id,
+                },
+            );
+        },
         .F2 => {
-            virt.shell.activateTaskSwitcher();
+            interpreter.shell.TaskSwitcher.activate();
         },
         .F9 => {
             @panic("you have no one to blame but yourself");

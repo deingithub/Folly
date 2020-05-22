@@ -22,7 +22,7 @@ export fn kmain() noreturn {
     const SGR = uart.ANSIFormat.SGR;
     uart.print(
         \\Welcome to {}.
-        \\{} to scream for God. They will not answer.
+        \\{} for statistics
         \\{} to switch tasks
         \\{} to shut down
         \\Godspeed.

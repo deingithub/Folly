@@ -17,14 +17,14 @@ const Page = extern struct {
         last = 0b0000_00010,
     };
 
-    pub inline fn is_taken(self: Page) bool {
+    pub inline fn isTaken(self: Page) bool {
         return (self.flags & @enumToInt(Flags.taken) > 0);
     }
-    pub inline fn is_last(self: Page) bool {
+    pub inline fn isLast(self: Page) bool {
         return (self.flags & @enumToInt(Flags.last) > 0);
     }
-    pub inline fn is_free(self: Page) bool {
-        return !is_taken(self);
+    pub inline fn isFree(self: Page) bool {
+        return !isTaken(self);
     }
 };
 
@@ -138,16 +138,16 @@ pub fn allocPages(num: usize) ![]u8 {
     var already_visited: usize = 0;
     outer: for (descriptors) |*page, index| {
         // skip if any pages in the set aren't free or we've already explored them and they were taken
-        if (page.is_taken() or already_visited > index) continue;
+        if (page.isTaken() or already_visited > index) continue;
         for (descriptors[index .. index + num]) |*other_page| {
-            if (other_page.is_taken()) {
+            if (other_page.isTaken()) {
                 already_visited += 1;
                 continue :outer;
             }
         }
         // set page descriptors
         for (descriptors[index .. index + num]) |*free_page, inner_index| {
-            assert(free_page.is_free());
+            assert(free_page.isFree());
             free_page.*.flags |= @enumToInt(Page.Flags.taken);
             if (inner_index == (num - 1)) {
                 free_page.*.flags |= @enumToInt(Page.Flags.last);
@@ -174,15 +174,28 @@ pub fn freePages(ptr: []u8) void {
     const page_count = (ptr.len / page_size) + 1;
     const first_page = (@ptrToInt(ptr.ptr) - alloc_start) / page_size;
     for (descriptors[first_page .. first_page + page_count]) |*desc, index| {
-        assert(desc.is_taken());
-        if (index == page_count - 1) assert(desc.is_last());
+        assert(desc.isTaken());
+        if (index == page_count - 1) assert(desc.isLast());
         desc.*.flags = @enumToInt(Page.Flags.empty);
     }
     for (ptr) |*b| b.* = 0;
 }
 
+pub fn statistics(kind: enum { pages_taken, pages_total }) usize {
+    return switch (kind) {
+        .pages_total => num_pages,
+        .pages_taken => blk: {
+            var c: usize = 0;
+            for (descriptors) |desc| {
+                if (desc.isTaken()) c += 1;
+            }
+            break :blk c;
+        },
+    };
+}
+
 fn dumpPageTable() void {
     for (descriptors) |desc, id| {
-        if (desc.is_taken()) uart.print("0x{x:0>3}\t{b:0>8}\n", .{ id, desc.flags });
+        if (desc.isTaken()) uart.print("0x{x:0>3}\t{b:0>8}\n", .{ id, desc.flags });
     }
 }

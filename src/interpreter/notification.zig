@@ -14,14 +14,25 @@ pub fn notify(data: VMNotif) void {
     if (comptime debug)
         uart.print("notify: received {}\n", .{data});
 
-    var it = interpreter.tasks.first;
-    while (it) |*node| : (it = node.*.next) {
-        if (node.*.data.handlers[@enumToInt(data)]) |address| {
-            if (comptime debug)
-                uart.print("notify: adding to {}\n", .{node.*.data});
+    switch (interpreter.state) {
+        .running => {
+            var it = interpreter.tasks.first;
+            while (it) |*node| : (it = node.*.next) {
+                if (interpreter.shell.foreground_task == node.*) {
+                    if (node.*.data.handlers[@enumToInt(data)]) |address| {
+                        if (comptime debug)
+                            uart.print("notify: adding to {}\n", .{node.*.data});
 
-            node.*.data.notifs.append(data) catch @panic("Kernel OOM in virt.notify()");
-            node.*.data.waiting = false;
-        }
+                        node.*.data.notifs.append(data) catch @panic("Kernel OOM in virt.notify()");
+                        node.*.data.waiting = false;
+                    }
+                }
+            }
+        },
+        .task_switching => {
+            if (data == .uart_data) {
+                _ = interpreter.shell.TaskSwitcher.line.read(data.uart_data) catch @panic("Kernel OOM in interpreter.notification.notify");
+            }
+        },
     }
 }
