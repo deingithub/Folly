@@ -2,16 +2,15 @@
 //! The grubby details are elsewhere in src/interpreter/.
 
 pub const heap = @import("./heap.zig");
-
 pub const vm = @import("./interpreter/vm.zig");
 pub const Frame = @import("./interpreter/Frame.zig");
-const notification = @import("./interpreter/notification.zig");
-const scheduler = @import("./interpreter/scheduler.zig");
-
 pub const schedule = scheduler.schedule;
 pub const notify = notification.notify;
 
+const notification = @import("./interpreter/notification.zig");
+const scheduler = @import("./interpreter/scheduler.zig");
 const example_tasks = @import("./interpreter/example_tasks.zig");
+const uart = @import("./uart.zig");
 
 /// The task that should get the next compute cycle.
 pub var active_task: *Frame.List.Node = undefined;
@@ -29,6 +28,7 @@ var root_task = Frame.List.Node.init(.{
 
 const debug = @import("build_options").log_vm;
 
+/// Set up the root task and (for now at least) example tasks
 pub fn init() void {
     if (comptime debug) uart.print("init interpreter...\n", .{});
 
@@ -41,6 +41,7 @@ pub fn init() void {
     createTask(example_tasks.did_you_know[0..]) catch @panic("Kernel OOM");
 }
 
+/// Create a task to be executed based on a slice of instructions
 pub fn createTask(program: []const Frame.Instruction) !void {
     new_id += 1;
     errdefer new_id -= 1;
@@ -52,16 +53,21 @@ pub fn createTask(program: []const Frame.Instruction) !void {
     tasks.prepend(task);
 }
 
+/// Kill a task and deallocate its resources.
 pub fn destroyTask(task: *Frame.List.Node) void {
+    task.data.deinit();
     tasks.remove(task);
     tasks.destroyNode(task, &heap.kpagealloc);
     active_task = &root_task;
 }
 
-pub fn switch_tasks() void {}
-
+/// Hand over control of this hart to the VM.
 pub fn run() void {
     while (true) {
         vm.one_step(active_task);
     }
 }
+
+pub const shell = struct {
+    pub fn activateTaskSwitcher() void {}
+};

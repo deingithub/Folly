@@ -1,4 +1,5 @@
 const interpreter = @import("../interpreter.zig");
+const uart = @import("../uart.zig");
 
 pub const VMNotifKind = @TagType(VMNotif);
 pub const VMNotif = union(enum) {

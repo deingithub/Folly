@@ -188,7 +188,7 @@ fn handle_escape_sequence(data: []const u8) void {
     if (comptime debug) print("uart: handling escape sequence {x}\n", .{data});
     switch (explain_escape_sequence(data).?) {
         .F1 => {
-            virt.switch_tasks();
+            virt.shell.activateTaskSwitcher();
         },
         .F9 => {
             @panic("you have no one to blame but yourself");

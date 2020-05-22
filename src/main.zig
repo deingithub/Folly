@@ -24,8 +24,8 @@ export fn kmain() noreturn {
         \\Welcome to {}.
         \\{} to switch tasks
         \\{} to shut down
-        \\
         \\Godspeed.
+        \\
         \\
     , .{
         SGR.render("The Folly of Cass", SGR.RenderOpts{ .fg = .yellow }),

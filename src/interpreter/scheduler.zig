@@ -1,4 +1,5 @@
 const interpreter = @import("../interpreter.zig");
+const uart = @import("../uart.zig");
 
 pub fn schedule() void {
     const my_debug = @import("build_options").log_sched;

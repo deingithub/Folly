@@ -73,9 +73,14 @@ pub const Instruction = union(enum) {
     },
 };
 
-pub fn format(t: Frame, comptime fmt: []const u8, options: std.fmt.FormatOptions, out_stream: var) !void {
+pub fn format(t: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, out_stream: var) !void {
     const val = if (t.sp == 0) -1 else @as(i16, t.stack[t.sp - 1]);
     try std.fmt.format(out_stream, "Task(id = {}, ip = {}, sp = {}, acc = {}, [sp-1] = {})", .{ t.id, t.ip, t.sp, t.acc, val });
+}
+
+pub fn deinit(self: *@This()) void {
+    self.notifs.deinit();
+    self.* = undefined;
 }
 
 comptime {
