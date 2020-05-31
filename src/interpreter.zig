@@ -17,7 +17,7 @@ const ReadLine = @import("lib/ReadLine.zig");
 /// The task that should get the next compute cycle.
 pub var active_task: *Frame.List.Node = undefined;
 /// All tasks.
-pub var tasks = Frame.List.init();
+pub var tasks = Frame.List{};
 /// The last as of yet never used ID
 var new_id: u32 = 0;
 /// What we ought to be doing right now
@@ -42,6 +42,7 @@ pub fn init() void {
     if (comptime debug) uart.print("  set up root idle task\n", .{});
 
     createTask(example_tasks.echo[0..]) catch @panic("Kernel OOM");
+    createTask(example_tasks.echo[0..]) catch @panic("Kernel OOM");
     createTask(example_tasks.just_think[0..]) catch @panic("Kernel OOM");
     createTask(example_tasks.did_you_know[0..]) catch @panic("Kernel OOM");
 }
@@ -50,19 +51,19 @@ pub fn init() void {
 pub fn createTask(program: []const Frame.Instruction) !void {
     new_id += 1;
     errdefer new_id -= 1;
-
-    const task = try tasks.createNode(.{
+    var node = try heap.kpagealloc.create(Frame.List.Node);
+    node.* = Frame.List.Node.init(.{
         .program = program,
         .id = new_id,
-    }, &heap.kpagealloc);
-    tasks.prepend(task);
+    });
+    tasks.prepend(node);
 }
 
 /// Kill a task and deallocate its resources.
 pub fn destroyTask(task: *Frame.List.Node) void {
     task.data.deinit();
     tasks.remove(task);
-    tasks.destroyNode(task, &heap.kpagealloc);
+    heap.kpagealloc.destroy(task);
     active_task = &root_task;
 }
 
@@ -122,6 +123,7 @@ pub const shell = struct {
                             return;
                         }
                     }
+                    uart.print("{} is not a task id.\n", .{chars});
                 } else {
                     uart.print("{} is not a task id.\n", .{chars});
                 }
